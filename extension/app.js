@@ -1454,33 +1454,16 @@ document.addEventListener('click', async (e) => {
     const urls = urlsEncoded.split(',').map(u => decodeURIComponent(u)).filter(Boolean);
     if (urls.length === 0) return;
 
+    const { totalExtras } = getDuplicateSummary(
+      (card?.dataset.domainId
+        ? (domainGroups.find(g => 'domain-' + g.domain.replace(/[^a-z0-9]/g, '-') === card.dataset.domainId)?.tabs || [])
+        : [])
+    );
+
     await closeDuplicateTabs(urls, true);
     playCloseSound();
-
-    // Hide the dedup button
-    actionEl.style.transition = 'opacity 0.2s';
-    actionEl.style.opacity    = '0';
-    setTimeout(() => actionEl.remove(), 200);
-
-    // Remove dupe badges from the card
-    if (card) {
-      card.querySelectorAll('.chip-dupe-badge').forEach(b => {
-        b.style.transition = 'opacity 0.2s';
-        b.style.opacity    = '0';
-        setTimeout(() => b.remove(), 200);
-      });
-      card.querySelectorAll('.open-tabs-badge').forEach(badge => {
-        if (badge.textContent.includes('duplicate')) {
-          badge.style.transition = 'opacity 0.2s';
-          badge.style.opacity    = '0';
-          setTimeout(() => badge.remove(), 200);
-        }
-      });
-      card.classList.remove('has-amber-bar');
-      card.classList.add('has-neutral-bar');
-    }
-
-    showToast('Closed duplicates, kept one copy each');
+    await renderDashboard();
+    showToast(`Closed ${totalExtras} duplicate tab${totalExtras !== 1 ? 's' : ''}`);
     return;
   }
 
