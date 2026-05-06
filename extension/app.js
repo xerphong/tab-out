@@ -872,7 +872,7 @@ function renderDomainCard(group) {
   if (hasDupes) {
     const dupeUrlsEncoded = dupeUrls.map(([url]) => encodeURIComponent(url)).join(',');
     actionsHtml += `
-      <button class="action-btn" data-action="dedup-keep-one" data-dupe-urls="${dupeUrlsEncoded}">
+      <button class="action-btn dedup-btn" data-action="dedup-keep-one" data-dupe-urls="${dupeUrlsEncoded}">
         Close ${totalExtras} duplicate${totalExtras !== 1 ? 's' : ''}
       </button>`;
   }
