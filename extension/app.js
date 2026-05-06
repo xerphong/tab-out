@@ -732,6 +732,20 @@ function getRealTabs() {
   });
 }
 
+function getDuplicateSummary(tabs) {
+  const urlCounts = {};
+  for (const tab of tabs) {
+    if (!tab.url) continue;
+    urlCounts[tab.url] = (urlCounts[tab.url] || 0) + 1;
+  }
+
+  const dupeEntries = Object.entries(urlCounts).filter(([, count]) => count > 1);
+  return {
+    urls: dupeEntries.map(([url]) => url),
+    totalExtras: dupeEntries.reduce((sum, [, count]) => sum + count - 1, 0),
+  };
+}
+
 /**
  * checkTabOutDupes()
  *
@@ -1029,6 +1043,7 @@ async function renderStaticDashboard() {
   // --- Fetch tabs ---
   await fetchOpenTabs();
   const realTabs = getRealTabs();
+  const { totalExtras: totalDuplicateExtras } = getDuplicateSummary(realTabs);
 
   // --- Group tabs by domain ---
   // Landing pages (Gmail inbox, Twitter home, etc.) get their own special group
@@ -1150,7 +1165,12 @@ async function renderStaticDashboard() {
 
   if (domainGroups.length > 0 && openTabsSection) {
     if (openTabsSectionTitle) openTabsSectionTitle.textContent = 'Open tabs';
-    openTabsSectionCount.innerHTML = `${domainGroups.length} domain${domainGroups.length !== 1 ? 's' : ''} &nbsp;&middot;&nbsp; <button class="action-btn close-tabs" data-action="close-all-open-tabs" style="font-size:11px;padding:3px 10px;">${ICONS.close} Close all ${realTabs.length} tabs</button>`;
+    const closeDuplicatesBtn = totalDuplicateExtras > 0
+      ? ` <button class="action-btn dedup-btn" data-action="close-all-duplicates" style="font-size:11px;padding:3px 10px;">
+            Close all ${totalDuplicateExtras} duplicate${totalDuplicateExtras !== 1 ? 's' : ''}
+          </button>`
+      : '';
+    openTabsSectionCount.innerHTML = `${domainGroups.length} domain${domainGroups.length !== 1 ? 's' : ''}${closeDuplicatesBtn} &nbsp;&middot;&nbsp; <button class="action-btn close-tabs" data-action="close-all-open-tabs" style="font-size:11px;padding:3px 10px;">${ICONS.close} Close all ${realTabs.length} tabs</button>`;
     openTabsMissionsEl.innerHTML = domainGroups.map(g => renderDomainCard(g)).join('');
     openTabsSection.style.display = 'block';
   } else if (openTabsSection) {
@@ -1199,6 +1219,18 @@ document.addEventListener('click', async (e) => {
       setTimeout(() => { banner.style.display = 'none'; banner.style.opacity = '1'; }, 400);
     }
     showToast('Closed extra Tab Out tabs');
+    return;
+  }
+
+  // ---- Close all duplicate tabs across the dashboard, keep one copy each ----
+  if (action === 'close-all-duplicates') {
+    const { urls, totalExtras } = getDuplicateSummary(getRealTabs());
+    if (urls.length === 0) return;
+
+    await closeDuplicateTabs(urls, true);
+    playCloseSound();
+    await renderDashboard();
+    showToast(`Closed ${totalExtras} duplicate tab${totalExtras !== 1 ? 's' : ''}`);
     return;
   }
 
