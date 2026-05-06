@@ -45,6 +45,7 @@ async function fetchOpenTabs() {
       title:    t.title,
       windowId: t.windowId,
       active:   t.active,
+      pinned:   t.pinned,
       // Flag Tab Out's own pages so we can detect duplicate new tabs
       isTabOut: t.url === newtabUrl || t.url === 'chrome://newtab/',
     }));
@@ -732,6 +733,25 @@ function getRealTabs() {
   });
 }
 
+function isPinnedTab(tab) {
+  return !!tab?.pinned;
+}
+
+function getDashboardTabs(tabs) {
+  const urlCounts = {};
+  const pinnedUrls = new Set();
+  for (const tab of tabs) {
+    if (!tab.url) continue;
+    urlCounts[tab.url] = (urlCounts[tab.url] || 0) + 1;
+    if (isPinnedTab(tab)) pinnedUrls.add(tab.url);
+  }
+
+  return tabs.filter(tab => {
+    if (!isPinnedTab(tab)) return true;
+    return (urlCounts[tab.url] || 0) > 1 && pinnedUrls.has(tab.url);
+  });
+}
+
 function getDuplicateSummary(tabs) {
   const urlCounts = {};
   for (const tab of tabs) {
@@ -744,6 +764,23 @@ function getDuplicateSummary(tabs) {
     urls: dupeEntries.map(([url]) => url),
     totalExtras: dupeEntries.reduce((sum, [, count]) => sum + count - 1, 0),
   };
+}
+
+async function closeOneTabByUrl(url, { preserveFixedHidden = false } = {}) {
+  if (!url) return false;
+
+  const allTabs = await chrome.tabs.query({});
+  const matching = allTabs.filter(t => t.url === url);
+  if (matching.length === 0) return false;
+
+  let target = matching[0];
+  if (preserveFixedHidden && matching.some(isPinnedTab) && matching.length > 1) {
+    target = matching.find(t => !t.pinned) || matching.find(t => !t.active) || matching[matching.length - 1];
+  }
+
+  await chrome.tabs.remove(target.id);
+  await fetchOpenTabs();
+  return true;
 }
 
 /**
@@ -1043,7 +1080,8 @@ async function renderStaticDashboard() {
   // --- Fetch tabs ---
   await fetchOpenTabs();
   const realTabs = getRealTabs();
-  const { totalExtras: totalDuplicateExtras } = getDuplicateSummary(realTabs);
+  const dashboardTabs = getDashboardTabs(realTabs);
+  const { totalExtras: totalDuplicateExtras } = getDuplicateSummary(dashboardTabs);
 
   // --- Group tabs by domain ---
   // Landing pages (Gmail inbox, Twitter home, etc.) get their own special group
@@ -1102,7 +1140,7 @@ async function renderStaticDashboard() {
     } catch { return null; }
   }
 
-  for (const tab of realTabs) {
+  for (const tab of dashboardTabs) {
     try {
       if (isLandingPage(tab.url)) {
         landingTabs.push(tab);
@@ -1224,7 +1262,7 @@ document.addEventListener('click', async (e) => {
 
   // ---- Close all duplicate tabs across the dashboard, keep one copy each ----
   if (action === 'close-all-duplicates') {
-    const { urls, totalExtras } = getDuplicateSummary(getRealTabs());
+    const { urls, totalExtras } = getDuplicateSummary(getDashboardTabs(getRealTabs()));
     if (urls.length === 0) return;
 
     await closeDuplicateTabs(urls, true);
@@ -1259,11 +1297,8 @@ document.addEventListener('click', async (e) => {
     const tabUrl = actionEl.dataset.tabUrl;
     if (!tabUrl) return;
 
-    // Close the tab in Chrome directly
-    const allTabs = await chrome.tabs.query({});
-    const match   = allTabs.find(t => t.url === tabUrl);
-    if (match) await chrome.tabs.remove(match.id);
-    await fetchOpenTabs();
+    const closed = await closeOneTabByUrl(tabUrl, { preserveFixedHidden: true });
+    if (!closed) return;
 
     playCloseSound();
 
@@ -1312,11 +1347,8 @@ document.addEventListener('click', async (e) => {
       return;
     }
 
-    // Close the tab in Chrome
-    const allTabs = await chrome.tabs.query({});
-    const match   = allTabs.find(t => t.url === tabUrl);
-    if (match) await chrome.tabs.remove(match.id);
-    await fetchOpenTabs();
+    const closed = await closeOneTabByUrl(tabUrl, { preserveFixedHidden: true });
+    if (!closed) return;
 
     // Animate chip out
     const chip = actionEl.closest('.page-chip');
@@ -1380,16 +1412,24 @@ document.addEventListener('click', async (e) => {
     });
     if (!group) return;
 
-    const urls      = group.tabs.map(t => t.url);
-    // Landing pages and custom groups (whose domain key isn't a real hostname)
-    // must use exact URL matching to avoid closing unrelated tabs
-    const useExact  = group.domain === '__landing-pages__' || !!group.label;
-
-    if (useExact) {
-      await closeTabsExact(urls);
-    } else {
-      await closeTabsByUrls(urls);
+    const urlCounts = {};
+    const pinnedUrls = new Set();
+    for (const tab of group.tabs) {
+      if (!tab.url) continue;
+      urlCounts[tab.url] = (urlCounts[tab.url] || 0) + 1;
+      if (isPinnedTab(tab)) pinnedUrls.add(tab.url);
     }
+
+    const uniqueUrls = Object.keys(urlCounts);
+    const pinnedDuplicateUrls = uniqueUrls.filter(url => pinnedUrls.has(url));
+    const regularUrls = uniqueUrls.filter(url => !pinnedUrls.has(url));
+    const closedCount = uniqueUrls.reduce((sum, url) => {
+      const count = urlCounts[url] || 0;
+      return sum + (pinnedUrls.has(url) ? Math.max(count - 1, 0) : count);
+    }, 0);
+
+    if (regularUrls.length > 0) await closeTabsExact(regularUrls);
+    if (pinnedDuplicateUrls.length > 0) await closeDuplicateTabs(pinnedDuplicateUrls, true);
 
     if (card) {
       playCloseSound();
@@ -1401,7 +1441,7 @@ document.addEventListener('click', async (e) => {
     if (idx !== -1) domainGroups.splice(idx, 1);
 
     const groupLabel = group.domain === '__landing-pages__' ? 'Homepages' : (group.label || friendlyDomain(group.domain));
-    showToast(`Closed ${urls.length} tab${urls.length !== 1 ? 's' : ''} from ${groupLabel}`);
+    showToast(`Closed ${closedCount} tab${closedCount !== 1 ? 's' : ''} from ${groupLabel}`);
 
     const statTabs = document.getElementById('statTabs');
     if (statTabs) statTabs.textContent = openTabs.length;
