@@ -56,6 +56,15 @@
 
     <!-- LEFT COLUMN: Open tabs -->
     <div class="active-section" id="openTabsSection" style="display:none">
+      <div class="quick-links-section" id="quickLinksSection">
+        <div class="section-header">
+          <h2>Quick links</h2>
+          <div class="section-line"></div>
+          <div class="section-count">18 slots</div>
+        </div>
+        <div class="quick-links-grid" id="quickLinksGrid"></div>
+      </div>
+
       <div class="section-header">
         <h2 id="openTabsSectionTitle">Right now</h2>
         <div class="section-line"></div>
@@ -127,6 +136,42 @@
 
 <!-- Personal config (gitignored) — defines LOCAL_LANDING_PAGE_PATTERNS etc. -->
 <!-- If the file doesn't exist, that's fine — app.js uses sensible defaults. -->
+<div class="modal-backdrop" id="quickLinkModal" style="display:none">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>Quick link</h3>
+      <button class="modal-close" data-action="close-quick-link-modal" title="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+
+    <form class="modal-form" id="quickLinkForm">
+      <input type="hidden" id="quickLinkIndex">
+
+      <label class="modal-label" for="quickLinkTitle">Display name</label>
+      <input class="modal-input" id="quickLinkTitle" maxlength="40" placeholder="Google">
+
+      <label class="modal-label" for="quickLinkUrl">URL</label>
+      <input class="modal-input" id="quickLinkUrl" maxlength="300" placeholder="https://www.google.com">
+
+      <div class="modal-note">
+        Saved changes apply immediately here. To move them to another computer, copy the config snippet below into <code>extension/config.local.js</code>.
+      </div>
+
+      <label class="modal-label" for="quickLinkConfigExport">Config snippet</label>
+      <textarea class="modal-textarea" id="quickLinkConfigExport" readonly></textarea>
+
+      <div class="modal-actions">
+        <button type="button" class="action-btn" id="quickLinkClear">Clear</button>
+        <button type="button" class="action-btn" id="quickLinkCopy">Copy config</button>
+        <button type="submit" class="action-btn save-tabs">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script src="config.local.js" onerror="/* no personal config, that's fine */"></script>
 
 <!-- Main dashboard logic — loads last so the DOM is ready -->

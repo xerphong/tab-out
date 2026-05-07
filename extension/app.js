@@ -708,6 +708,151 @@ const ICONS = {
    IN-MEMORY STORE FOR OPEN-TAB GROUPS
    ---------------------------------------------------------------- */
 let domainGroups = [];
+const QUICK_LINKS_STORAGE_KEY = 'quickLinks';
+const QUICK_LINK_SLOTS = 18;
+const DEFAULT_QUICK_LINKS = [
+  { title: 'Google', url: 'https://www.google.com' },
+  ...Array.from({ length: QUICK_LINK_SLOTS - 1 }, () => ({ title: '', url: '' })),
+];
+
+function normalizeQuickLink(entry = {}) {
+  return {
+    title: typeof entry.title === 'string' ? entry.title.trim() : '',
+    url: typeof entry.url === 'string' ? entry.url.trim() : '',
+  };
+}
+
+function normalizeQuickLinks(links = []) {
+  const normalized = Array.from({ length: QUICK_LINK_SLOTS }, (_, index) => {
+    return normalizeQuickLink(links[index] || {});
+  });
+  return normalized;
+}
+
+async function getQuickLinks() {
+  const configLinks = typeof LOCAL_QUICK_LINKS !== 'undefined'
+    ? normalizeQuickLinks(LOCAL_QUICK_LINKS)
+    : normalizeQuickLinks(DEFAULT_QUICK_LINKS);
+
+  const { [QUICK_LINKS_STORAGE_KEY]: savedLinks } = await chrome.storage.local.get(QUICK_LINKS_STORAGE_KEY);
+  if (!savedLinks) return configLinks;
+  return normalizeQuickLinks(savedLinks);
+}
+
+async function saveQuickLinks(links) {
+  await chrome.storage.local.set({
+    [QUICK_LINKS_STORAGE_KEY]: normalizeQuickLinks(links),
+  });
+}
+
+function quickLinkFavicon(url) {
+  try {
+    const hostname = new URL(url).hostname;
+    return `https://www.google.com/s2/favicons?domain=${hostname}&sz=32`;
+  } catch {
+    return '';
+  }
+}
+
+function quickLinkHostname(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+function exportQuickLinksConfig(links) {
+  const lines = normalizeQuickLinks(links).map(link => {
+    const title = JSON.stringify(link.title || '');
+    const url = JSON.stringify(link.url || '');
+    return `  { title: ${title}, url: ${url} },`;
+  });
+
+  return [
+    '// Personal quick links for Tab Out',
+    'const LOCAL_QUICK_LINKS = [',
+    ...lines,
+    '];',
+  ].join('\n');
+}
+
+async function renderQuickLinks() {
+  const quickLinksGrid = document.getElementById('quickLinksGrid');
+  if (!quickLinksGrid) return;
+
+  const quickLinks = await getQuickLinks();
+  quickLinksGrid.innerHTML = quickLinks.map((link, index) => {
+    const hasLink = !!link.url;
+    const safeTitle = (link.title || '').replace(/"/g, '&quot;');
+    const safeUrl = (link.url || '').replace(/"/g, '&quot;');
+    const favicon = hasLink ? quickLinkFavicon(link.url) : '';
+    const hostname = hasLink ? quickLinkHostname(link.url) : 'Click settings to add one';
+
+    return `
+      <div class="quick-link-card ${hasLink ? 'is-filled' : 'is-empty'}" ${hasLink ? `data-action="open-quick-link" data-quick-link-url="${safeUrl}"` : ''}>
+        <button class="quick-link-settings chip-action" data-action="edit-quick-link" data-quick-link-index="${index}" title="Edit quick link">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.9" /><circle cx="12" cy="12" r="1.9" /><circle cx="12" cy="19" r="1.9" /></svg>
+        </button>
+        <div class="quick-link-body">
+          ${favicon ? `<img class="quick-link-favicon" src="${favicon}" alt="" onerror="this.style.display='none'">` : `<div class="quick-link-favicon quick-link-favicon--empty" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor">
+              <rect x="3.75" y="4.75" width="16.5" height="14.5" rx="3" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 19.25v1m8-1v1M7.5 8.5h9m-9 3.5h5" />
+            </svg>
+          </div>`}
+          <div class="quick-link-title">${link.title || 'Empty slot'}</div>
+          <div class="quick-link-meta">${hostname}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function openQuickLinkModal(index) {
+  const quickLinks = await getQuickLinks();
+  const link = quickLinks[index] || { title: '', url: '' };
+  const modal = document.getElementById('quickLinkModal');
+  const indexInput = document.getElementById('quickLinkIndex');
+  const titleInput = document.getElementById('quickLinkTitle');
+  const urlInput = document.getElementById('quickLinkUrl');
+  const exportEl = document.getElementById('quickLinkConfigExport');
+
+  if (!modal || !indexInput || !titleInput || !urlInput || !exportEl) return;
+
+  indexInput.value = String(index);
+  titleInput.value = link.title || '';
+  urlInput.value = link.url || '';
+  exportEl.value = exportQuickLinksConfig(quickLinks);
+  modal.style.display = 'flex';
+}
+
+function closeQuickLinkModal() {
+  const modal = document.getElementById('quickLinkModal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function saveQuickLinkFromModal({ clear = false } = {}) {
+  const index = Number(document.getElementById('quickLinkIndex')?.value ?? '-1');
+  if (index < 0 || index > 9) return;
+
+  const titleInput = document.getElementById('quickLinkTitle');
+  const urlInput = document.getElementById('quickLinkUrl');
+  const quickLinks = await getQuickLinks();
+
+  const title = clear ? '' : (titleInput?.value || '').trim();
+  let url = clear ? '' : (urlInput?.value || '').trim();
+  if (url && !/^https?:\/\//i.test(url)) url = `https://${url}`;
+
+  quickLinks[index] = { title, url };
+  await saveQuickLinks(quickLinks);
+
+  const exportEl = document.getElementById('quickLinkConfigExport');
+  if (exportEl) exportEl.value = exportQuickLinksConfig(quickLinks);
+
+  await renderQuickLinks();
+  showToast(clear ? 'Quick link cleared' : 'Quick link saved');
+  closeQuickLinkModal();
+}
 
 
 /* ----------------------------------------------------------------
@@ -1076,6 +1221,7 @@ async function renderStaticDashboard() {
   const dateEl     = document.getElementById('dateDisplay');
   if (greetingEl) greetingEl.textContent = getGreeting();
   if (dateEl)     dateEl.textContent     = getDateDisplay();
+  await renderQuickLinks();
 
   // --- Fetch tabs ---
   await fetchOpenTabs();
@@ -1201,6 +1347,10 @@ async function renderStaticDashboard() {
   const openTabsSectionCount = document.getElementById('openTabsSectionCount');
   const openTabsSectionTitle = document.getElementById('openTabsSectionTitle');
 
+  if (openTabsSection) {
+    openTabsSection.style.display = 'block';
+  }
+
   if (domainGroups.length > 0 && openTabsSection) {
     if (openTabsSectionTitle) openTabsSectionTitle.textContent = 'Open tabs';
     const closeDuplicatesBtn = totalDuplicateExtras > 0
@@ -1211,8 +1361,10 @@ async function renderStaticDashboard() {
     openTabsSectionCount.innerHTML = `${domainGroups.length} domain${domainGroups.length !== 1 ? 's' : ''}${closeDuplicatesBtn}`;
     openTabsMissionsEl.innerHTML = domainGroups.map(g => renderDomainCard(g)).join('');
     openTabsSection.style.display = 'block';
-  } else if (openTabsSection) {
-    openTabsSection.style.display = 'none';
+  } else {
+    if (openTabsSectionTitle) openTabsSectionTitle.textContent = 'Open tabs';
+    if (openTabsSectionCount) openTabsSectionCount.textContent = '0 domains';
+    if (openTabsMissionsEl) openTabsMissionsEl.innerHTML = '';
   }
 
   // --- Footer stats ---
@@ -1240,11 +1392,34 @@ async function renderDashboard() {
    ---------------------------------------------------------------- */
 
 document.addEventListener('click', async (e) => {
+  if (e.target.id === 'quickLinkModal') {
+    closeQuickLinkModal();
+    return;
+  }
+
   // Walk up the DOM to find the nearest element with data-action
   const actionEl = e.target.closest('[data-action]');
   if (!actionEl) return;
 
   const action = actionEl.dataset.action;
+
+  if (action === 'close-quick-link-modal') {
+    closeQuickLinkModal();
+    return;
+  }
+
+  if (action === 'edit-quick-link') {
+    e.stopPropagation();
+    const index = Number(actionEl.dataset.quickLinkIndex || '-1');
+    if (index >= 0) await openQuickLinkModal(index);
+    return;
+  }
+
+  if (action === 'open-quick-link') {
+    const targetUrl = actionEl.dataset.quickLinkUrl;
+    if (targetUrl) window.location.href = targetUrl;
+    return;
+  }
 
   // ---- Close duplicate Tab Out tabs ----
   if (action === 'close-tabout-dupes') {
@@ -1530,6 +1705,28 @@ document.addEventListener('input', async (e) => {
   }
 });
 
+
+document.getElementById('quickLinkForm')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  await saveQuickLinkFromModal();
+});
+
+document.getElementById('quickLinkClear')?.addEventListener('click', async () => {
+  await saveQuickLinkFromModal({ clear: true });
+});
+
+document.getElementById('quickLinkCopy')?.addEventListener('click', async () => {
+  const exportEl = document.getElementById('quickLinkConfigExport');
+  const text = exportEl?.value || '';
+  if (!text) return;
+
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('Config copied');
+  } catch {
+    showToast('Copy failed');
+  }
+});
 
 /* ----------------------------------------------------------------
    INITIALIZE
