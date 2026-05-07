@@ -782,6 +782,18 @@ header {
   border-color: var(--accent-sage);
 }
 
+.action-btn.split-tabs {
+  width: 28px;
+  padding: 5px 0;
+  justify-content: center;
+}
+
+.action-btn.split-tabs:hover {
+  border-color: var(--accent-slate);
+  color: var(--accent-slate);
+  background: rgba(123, 143, 156, 0.14);
+}
+
 .action-btn.dedup-btn {
   border: 2px solid var(--status-abandoned);
   color: #fff;

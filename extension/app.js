@@ -699,6 +699,7 @@ function smartTitle(title, url) {
 const ICONS = {
   tabs:    `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 8.25V18a2.25 2.25 0 0 0 2.25 2.25h13.5A2.25 2.25 0 0 0 21 18V8.25m-18 0V6a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 6v2.25m-18 0h18" /></svg>`,
   close:   `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>`,
+  split:   `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h6m0 0 3-3m-3 3 3 3m7 7h-6m0 0-3-3m3 3-3 3M4 17h4.5A3.5 3.5 0 0 0 12 13.5v-3A3.5 3.5 0 0 1 15.5 7H20" /></svg>`,
   archive: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5m6 4.125l2.25 2.25m0 0l2.25 2.25M12 13.875l2.25-2.25M12 13.875l-2.25 2.25M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" /></svg>`,
   focus:   `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 19.5 15-15m0 0H8.25m11.25 0v11.25" /></svg>`,
 };
@@ -710,10 +711,23 @@ const ICONS = {
 let domainGroups = [];
 const QUICK_LINKS_STORAGE_KEY = 'quickLinks';
 const QUICK_LINK_SLOTS = 18;
+const DOMAIN_SPLIT_RULES_STORAGE_KEY = 'domainSplitRules';
 const DEFAULT_QUICK_LINKS = [
   { title: 'Google', url: 'https://www.google.com' },
   ...Array.from({ length: QUICK_LINK_SLOTS - 1 }, () => ({ title: '', url: '' })),
 ];
+
+function makeGroupId(value) {
+  return 'domain-' + String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function getGroupStableId(group) {
+  return makeGroupId(group?.id || group?.domain || '');
+}
+
+function findDomainGroupById(groupId) {
+  return domainGroups.find(group => getGroupStableId(group) === groupId);
+}
 
 function normalizeQuickLink(entry = {}) {
   return {
@@ -727,6 +741,65 @@ function normalizeQuickLinks(links = []) {
     return normalizeQuickLink(links[index] || {});
   });
   return normalized;
+}
+
+function normalizeDomainSplitRule(entry = {}) {
+  return {
+    domain: typeof entry.domain === 'string' ? entry.domain.trim().toLowerCase() : '',
+    keyword: typeof entry.keyword === 'string' ? entry.keyword.trim() : '',
+    createdAt: typeof entry.createdAt === 'string' ? entry.createdAt : new Date().toISOString(),
+  };
+}
+
+function normalizeDomainSplitRules(rules = []) {
+  const seen = new Set();
+  return rules
+    .map(normalizeDomainSplitRule)
+    .filter(rule => {
+      if (!rule.domain || !rule.keyword) return false;
+      const key = `${rule.domain}::${rule.keyword.toLowerCase()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+async function getDomainSplitRules() {
+  const { [DOMAIN_SPLIT_RULES_STORAGE_KEY]: savedRules } = await chrome.storage.local.get(DOMAIN_SPLIT_RULES_STORAGE_KEY);
+  return normalizeDomainSplitRules(savedRules || []);
+}
+
+async function saveDomainSplitRules(rules) {
+  await chrome.storage.local.set({
+    [DOMAIN_SPLIT_RULES_STORAGE_KEY]: normalizeDomainSplitRules(rules),
+  });
+}
+
+async function addDomainSplitRule(domain, keyword) {
+  const rules = await getDomainSplitRules();
+  const normalized = normalizeDomainSplitRule({ domain, keyword });
+  const exists = rules.some(rule =>
+    rule.domain === normalized.domain &&
+    rule.keyword.toLowerCase() === normalized.keyword.toLowerCase()
+  );
+  if (!exists) rules.push(normalized);
+  await saveDomainSplitRules(rules);
+}
+
+async function removeDomainSplitRule(domain, keyword) {
+  const rules = await getDomainSplitRules();
+  await saveDomainSplitRules(rules.filter(rule =>
+    !(rule.domain === domain && rule.keyword.toLowerCase() === keyword.toLowerCase())
+  ));
+}
+
+function matchDomainSplitRule(hostname, title, rules) {
+  const cleanHostname = (hostname || '').toLowerCase();
+  const cleanTitle = (title || '').toLowerCase();
+  return rules.find(rule =>
+    rule.domain === cleanHostname &&
+    cleanTitle.includes(rule.keyword.toLowerCase())
+  ) || null;
 }
 
 async function getQuickLinks() {
@@ -831,9 +904,45 @@ function closeQuickLinkModal() {
   if (modal) modal.style.display = 'none';
 }
 
+function openDomainSplitModal(groupId) {
+  const group = findDomainGroupById(groupId);
+  if (!group || group.domain === '__landing-pages__') return;
+
+  const modal = document.getElementById('domainSplitModal');
+  const domainInput = document.getElementById('domainSplitDomain');
+  const labelInput = document.getElementById('domainSplitLabel');
+  const keywordInput = document.getElementById('domainSplitKeyword');
+  if (!modal || !domainInput || !labelInput || !keywordInput) return;
+
+  domainInput.value = group.domain || '';
+  labelInput.value = group.label || friendlyDomain(group.domain);
+  keywordInput.value = '';
+  modal.style.display = 'flex';
+  setTimeout(() => keywordInput.focus(), 0);
+}
+
+function closeDomainSplitModal() {
+  const modal = document.getElementById('domainSplitModal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function saveDomainSplitFromModal() {
+  const domain = document.getElementById('domainSplitDomain')?.value || '';
+  const keyword = document.getElementById('domainSplitKeyword')?.value.trim() || '';
+  if (!domain || !keyword) {
+    showToast('Type a title keyword first');
+    return;
+  }
+
+  await addDomainSplitRule(domain, keyword);
+  closeDomainSplitModal();
+  await renderDashboard();
+  showToast(`Split ${friendlyDomain(domain)} by "${keyword}"`);
+}
+
 async function saveQuickLinkFromModal({ clear = false } = {}) {
   const index = Number(document.getElementById('quickLinkIndex')?.value ?? '-1');
-  if (index < 0 || index > 9) return;
+  if (index < 0 || index >= QUICK_LINK_SLOTS) return;
 
   const titleInput = document.getElementById('quickLinkTitle');
   const urlInput = document.getElementById('quickLinkUrl');
@@ -1000,7 +1109,7 @@ function renderDomainCard(group) {
   const tabs      = group.tabs || [];
   const tabCount  = tabs.length;
   const isLanding = group.domain === '__landing-pages__';
-  const stableId  = 'domain-' + group.domain.replace(/[^a-z0-9]/g, '-');
+  const stableId  = getGroupStableId(group);
 
   // Count duplicates (exact URL match)
   const urlCounts = {};
@@ -1064,6 +1173,20 @@ function renderDomainCard(group) {
       ${ICONS.close}
       Close all ${tabCount} tab${tabCount !== 1 ? 's' : ''}
     </button>`;
+
+  if (!isLanding && !group.splitKeyword) {
+    actionsHtml += `
+      <button class="action-btn split-tabs" data-action="open-domain-split" data-domain-id="${stableId}" title="Split this domain by title text">
+        ${ICONS.split}
+      </button>`;
+  }
+
+  if (group.splitKeyword) {
+    actionsHtml += `
+      <button class="action-btn" data-action="remove-domain-split" data-domain="${group.domain}" data-split-keyword="${(group.splitKeyword || '').replace(/"/g, '&quot;')}">
+        Merge back
+      </button>`;
+  }
 
   if (hasDupes) {
     const dupeUrlsEncoded = dupeUrls.map(([url]) => encodeURIComponent(url)).join(',');
@@ -1265,6 +1388,7 @@ async function renderStaticDashboard() {
   domainGroups = [];
   const groupMap    = {};
   const landingTabs = [];
+  const domainSplitRules = await getDomainSplitRules();
 
   // Custom group rules from config.local.js (if any)
   const customGroups = typeof LOCAL_CUSTOM_GROUPS !== 'undefined' ? LOCAL_CUSTOM_GROUPS : [];
@@ -1310,7 +1434,23 @@ async function renderStaticDashboard() {
       }
       if (!hostname) continue;
 
-      if (!groupMap[hostname]) groupMap[hostname] = { domain: hostname, tabs: [] };
+      const splitRule = matchDomainSplitRule(hostname, tab.title, domainSplitRules);
+      if (splitRule) {
+        const splitKey = `${hostname}::title-split::${splitRule.keyword.toLowerCase()}`;
+        if (!groupMap[splitKey]) {
+          groupMap[splitKey] = {
+            id: splitKey,
+            domain: hostname,
+            label: `${friendlyDomain(hostname)} + ${splitRule.keyword}`,
+            splitKeyword: splitRule.keyword,
+            tabs: [],
+          };
+        }
+        groupMap[splitKey].tabs.push(tab);
+        continue;
+      }
+
+      if (!groupMap[hostname]) groupMap[hostname] = { id: hostname, domain: hostname, tabs: [] };
       groupMap[hostname].tabs.push(tab);
     } catch {
       // Skip malformed URLs
@@ -1396,6 +1536,10 @@ document.addEventListener('click', async (e) => {
     closeQuickLinkModal();
     return;
   }
+  if (e.target.id === 'domainSplitModal') {
+    closeDomainSplitModal();
+    return;
+  }
 
   // Walk up the DOM to find the nearest element with data-action
   const actionEl = e.target.closest('[data-action]');
@@ -1405,6 +1549,11 @@ document.addEventListener('click', async (e) => {
 
   if (action === 'close-quick-link-modal') {
     closeQuickLinkModal();
+    return;
+  }
+
+  if (action === 'close-domain-split-modal') {
+    closeDomainSplitModal();
     return;
   }
 
@@ -1418,6 +1567,24 @@ document.addEventListener('click', async (e) => {
   if (action === 'open-quick-link') {
     const targetUrl = actionEl.dataset.quickLinkUrl;
     if (targetUrl) window.location.href = targetUrl;
+    return;
+  }
+
+  if (action === 'open-domain-split') {
+    e.stopPropagation();
+    const groupId = actionEl.dataset.domainId;
+    if (groupId) openDomainSplitModal(groupId);
+    return;
+  }
+
+  if (action === 'remove-domain-split') {
+    e.stopPropagation();
+    const domain = actionEl.dataset.domain;
+    const keyword = actionEl.dataset.splitKeyword;
+    if (!domain || !keyword) return;
+    await removeDomainSplitRule(domain, keyword);
+    await renderDashboard();
+    showToast('Merged split group back');
     return;
   }
 
@@ -1582,9 +1749,7 @@ document.addEventListener('click', async (e) => {
   // ---- Close all tabs in a domain group ----
   if (action === 'close-domain-tabs') {
     const domainId = actionEl.dataset.domainId;
-    const group    = domainGroups.find(g => {
-      return 'domain-' + g.domain.replace(/[^a-z0-9]/g, '-') === domainId;
-    });
+    const group    = findDomainGroupById(domainId);
     if (!group) return;
 
     const urlCounts = {};
@@ -1631,7 +1796,7 @@ document.addEventListener('click', async (e) => {
 
     const { totalExtras } = getDuplicateSummary(
       (card?.dataset.domainId
-        ? (domainGroups.find(g => 'domain-' + g.domain.replace(/[^a-z0-9]/g, '-') === card.dataset.domainId)?.tabs || [])
+        ? (findDomainGroupById(card.dataset.domainId)?.tabs || [])
         : [])
     );
 
@@ -1709,6 +1874,11 @@ document.addEventListener('input', async (e) => {
 document.getElementById('quickLinkForm')?.addEventListener('submit', async (e) => {
   e.preventDefault();
   await saveQuickLinkFromModal();
+});
+
+document.getElementById('domainSplitForm')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  await saveDomainSplitFromModal();
 });
 
 document.getElementById('quickLinkClear')?.addEventListener('click', async () => {

@@ -172,6 +172,38 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="domainSplitModal" style="display:none">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>Split domain</h3>
+      <button class="modal-close" data-action="close-domain-split-modal" title="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+
+    <form class="modal-form" id="domainSplitForm">
+      <input type="hidden" id="domainSplitDomain">
+
+      <label class="modal-label" for="domainSplitLabel">Domain</label>
+      <input class="modal-input" id="domainSplitLabel" readonly>
+
+      <label class="modal-label" for="domainSplitKeyword">Title contains</label>
+      <input class="modal-input" id="domainSplitKeyword" maxlength="80" placeholder="anime">
+
+      <div class="modal-note">
+        Matching open tabs move into a new domain card named Domain + keyword. The split rule is stored locally in this browser.
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="action-btn" data-action="close-domain-split-modal">Cancel</button>
+        <button type="submit" class="action-btn save-tabs">Split</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script src="config.local.js" onerror="/* no personal config, that's fine */"></script>
 
 <!-- Main dashboard logic — loads last so the DOM is ready -->
