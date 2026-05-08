@@ -228,7 +228,7 @@ async function closeTabOutDupes() {
  */
 async function saveTabForLater(tab) {
   const { deferred = [] } = await chrome.storage.local.get('deferred');
-  deferred.push({
+  deferred.unshift({
     id:        Date.now().toString(),
     url:       tab.url,
     title:     tab.title,
@@ -280,6 +280,24 @@ async function dismissSavedTab(id) {
   const tab = deferred.find(t => t.id === id);
   if (tab) {
     tab.dismissed = true;
+    await chrome.storage.local.set({ deferred });
+  }
+}
+
+async function dismissSavedDomain(domainKey) {
+  const { deferred = [] } = await chrome.storage.local.get('deferred');
+  let changed = false;
+
+  for (const item of deferred) {
+    if (item.completed || item.dismissed) continue;
+    const info = deferredDomainInfo(item.url);
+    if (info.domain.toLowerCase() === String(domainKey || '').toLowerCase()) {
+      item.dismissed = true;
+      changed = true;
+    }
+  }
+
+  if (changed) {
     await chrome.storage.local.set({ deferred });
   }
 }
@@ -775,6 +793,61 @@ async function saveDomainSplitRules(rules) {
   });
 }
 
+const deferredGroupCollapseState = new Map();
+
+function deferredDomainInfo(url) {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname || '';
+    const domain = hostname.replace(/^www\./, '') || hostname || 'unknown';
+    return {
+      hostname,
+      domain,
+      label: friendlyDomain(hostname) || domain || 'Unknown',
+    };
+  } catch {
+    return {
+      hostname: '',
+      domain: 'unknown',
+      label: 'Unknown',
+    };
+  }
+}
+
+function groupDeferredTabsByDomain(items = []) {
+  const groups = new Map();
+
+  for (const item of items) {
+    const info = deferredDomainInfo(item.url);
+    const key = info.domain.toLowerCase();
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        domain: info.domain,
+        label: info.label,
+        hostname: info.hostname,
+        items: [],
+      });
+    }
+    groups.get(key).items.push(item);
+  }
+
+  return Array.from(groups.values())
+    .map(group => ({
+      ...group,
+      items: group.items.slice().sort((a, b) => new Date(b.savedAt || 0) - new Date(a.savedAt || 0)),
+    }))
+    .sort((a, b) => a.domain.localeCompare(b.domain, undefined, { sensitivity: 'base' }));
+}
+
+function isDeferredGroupCollapsed(groupKey) {
+  return deferredGroupCollapseState.get(groupKey) === true;
+}
+
+function toggleDeferredGroup(groupKey) {
+  deferredGroupCollapseState.set(groupKey, !isDeferredGroupCollapsed(groupKey));
+}
+
 async function addDomainSplitRule(domain, keyword) {
   const rules = await getDomainSplitRules();
   const normalized = normalizeDomainSplitRule({ domain, keyword });
@@ -1240,6 +1313,7 @@ async function renderDeferredColumn() {
 
   try {
     const { active, archived } = await getSavedTabs();
+    const activeGroups = groupDeferredTabsByDomain(active);
 
     // Hide the entire column if there's nothing to show
     if (active.length === 0 && archived.length === 0) {
@@ -1251,9 +1325,9 @@ async function renderDeferredColumn() {
 
     // Render active checklist items
     if (active.length > 0) {
-      countEl.textContent = `${active.length} item${active.length !== 1 ? 's' : ''}`;
-      list.innerHTML = active.map(item => renderDeferredItem(item)).join('');
-      list.style.display = 'block';
+      countEl.textContent = `${activeGroups.length} domain${activeGroups.length !== 1 ? 's' : ''}`;
+      list.innerHTML = activeGroups.map(group => renderDeferredGroup(group)).join('');
+      list.style.display = 'flex';
       empty.style.display = 'none';
     } else {
       list.style.display = 'none';
@@ -1283,9 +1357,8 @@ async function renderDeferredColumn() {
  * domain, time ago, dismiss button.
  */
 function renderDeferredItem(item) {
-  let domain = '';
-  try { domain = new URL(item.url).hostname.replace(/^www\./, ''); } catch {}
-  const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=16`;
+  const { hostname, domain } = deferredDomainInfo(item.url);
+  const faviconUrl = hostname ? `https://www.google.com/s2/favicons?domain=${hostname}&sz=16` : '';
   const ago = timeAgo(item.savedAt);
 
   return `
@@ -1293,7 +1366,7 @@ function renderDeferredItem(item) {
       <input type="checkbox" class="deferred-checkbox" data-action="check-deferred" data-deferred-id="${item.id}">
       <div class="deferred-info">
         <a href="${item.url}" target="_blank" rel="noopener" class="deferred-title" title="${(item.title || '').replace(/"/g, '&quot;')}">
-          <img src="${faviconUrl}" alt="" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px" onerror="this.style.display='none'">${item.title || item.url}
+          ${faviconUrl ? `<img src="${faviconUrl}" alt="" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px" onerror="this.style.display='none'">` : ''}${item.title || item.url}
         </a>
         <div class="deferred-meta">
           <span>${domain}</span>
@@ -1304,6 +1377,33 @@ function renderDeferredItem(item) {
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
       </button>
     </div>`;
+}
+
+function renderDeferredGroup(group) {
+  const isCollapsed = isDeferredGroupCollapsed(group.key);
+  const itemCount = group.items.length;
+  const bodyDisplay = isCollapsed ? 'none' : 'block';
+  const faviconUrl = group.hostname ? `https://www.google.com/s2/favicons?domain=${group.hostname}&sz=16` : '';
+
+  return `
+    <section class="deferred-group" data-domain-key="${group.key}">
+      <div class="deferred-group-header">
+        <button class="deferred-group-toggle ${isCollapsed ? '' : 'open'}" data-action="toggle-deferred-group" data-domain-key="${group.key}">
+          <svg class="deferred-group-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+          <span class="deferred-group-title-wrap">
+            ${faviconUrl ? `<img src="${faviconUrl}" alt="" class="deferred-group-favicon" onerror="this.style.display='none'">` : ''}
+            <span class="deferred-group-title">${group.label}</span>
+          </span>
+          <span class="deferred-group-count">${itemCount}</span>
+        </button>
+        <button class="deferred-group-dismiss" data-action="dismiss-deferred-domain" data-domain-key="${group.key}" data-domain-label="${group.label.replace(/"/g, '&quot;')}" title="Close this saved domain">
+          Close all
+        </button>
+      </div>
+      <div class="deferred-group-body" style="display:${bodyDisplay}">
+        ${group.items.map(item => renderDeferredItem(item)).join('')}
+      </div>
+    </section>`;
 }
 
 /**
@@ -1746,6 +1846,28 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
+  if (action === 'dismiss-deferred-domain') {
+    const domainKey = actionEl.dataset.domainKey;
+    const domainLabel = actionEl.dataset.domainLabel || 'this domain';
+    if (!domainKey) return;
+
+    await dismissSavedDomain(domainKey);
+
+    const group = actionEl.closest('.deferred-group');
+    if (group) {
+      group.classList.add('removing');
+      setTimeout(() => {
+        group.remove();
+        renderDeferredColumn();
+      }, 300);
+    } else {
+      await renderDeferredColumn();
+    }
+
+    showToast(`Closed saved tabs from ${domainLabel}`);
+    return;
+  }
+
   // ---- Close all tabs in a domain group ----
   if (action === 'close-domain-tabs') {
     const domainId = actionEl.dataset.domainId;
@@ -1895,6 +2017,23 @@ document.getElementById('quickLinkCopy')?.addEventListener('click', async () => 
     showToast('Config copied');
   } catch {
     showToast('Copy failed');
+  }
+});
+
+document.addEventListener('click', (e) => {
+  const toggle = e.target.closest('[data-action="toggle-deferred-group"]');
+  if (!toggle) return;
+
+  const groupKey = toggle.dataset.domainKey;
+  if (!groupKey) return;
+
+  toggleDeferredGroup(groupKey);
+  toggle.classList.toggle('open');
+
+  const group = toggle.closest('.deferred-group');
+  const body = group?.querySelector('.deferred-group-body');
+  if (body) {
+    body.style.display = body.style.display === 'none' ? 'block' : 'none';
   }
 });
 

@@ -100,7 +100,7 @@ header {
 .tab-cleanup-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 1px;
 }
 
 .tab-cleanup-icon {
@@ -1169,6 +1169,119 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   overflow-y: auto;
 }
 
+.deferred-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.deferred-group {
+  border: 1px solid rgba(154, 149, 141, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  overflow: hidden;
+  animation: fadeUp 0.3s ease both;
+}
+
+.deferred-group.removing {
+  opacity: 0;
+  transform: translateX(20px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.deferred-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.deferred-group-toggle {
+  font-family: 'DM Sans', sans-serif;
+  background: none;
+  border: none;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.deferred-group-toggle:hover .deferred-group-title {
+  color: var(--accent-amber);
+}
+
+.deferred-group-chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.deferred-group-toggle.open .deferred-group-chevron {
+  transform: rotate(180deg);
+}
+
+.deferred-group-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.deferred-group-favicon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.deferred-group-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  transition: color 0.15s ease;
+}
+
+.deferred-group-count {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(154, 149, 141, 0.12);
+  flex-shrink: 0;
+}
+
+.deferred-group-dismiss {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  color: var(--muted);
+  background: none;
+  border: 1px solid rgba(154, 149, 141, 0.18);
+  border-radius: 999px;
+  padding: 5px 9px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.deferred-group-dismiss:hover {
+  color: var(--status-abandoned);
+  border-color: rgba(196, 102, 102, 0.35);
+  background: rgba(196, 102, 102, 0.08);
+}
+
+.deferred-group-body {
+  padding: 0 12px 4px;
+}
+
 /* On narrow screens, stack vertically */
 @media (max-width: 800px) {
   .dashboard-columns {
@@ -1258,6 +1371,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   margin-top: 2px;
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* Checked-off item — strikethrough + faded */
