@@ -15,10 +15,10 @@ No server. No account. No external API calls. Just a Chrome extension.
 
 - Added customizable quick links for frequently used sites.  
   增加了可自定义的 Quick Links，方便快速打开常用网站。
-- Added local-only personal config support through `extension/config.local.js`.  
-  增加了 `extension/config.local.js` 本地私有配置支持，个人配置不会进入仓库。
-- Refined the dashboard experience and attribution for this maintained fork.  
-  对面板体验和署名信息做了调整，更适合作为持续维护的 fork 版本。
+- Added keyword-based domain split rules for more precise grouping.  
+  增加了基于关键词的 domain 拆分规则，让分组更精细。
+- Grouped saved-for-later tabs by domain for easier review and cleanup.  
+  将 Saved for Later 标签按域名分组，后续整理和回看更方便。
 
 ---
 
@@ -27,8 +27,8 @@ No server. No account. No external API calls. Just a Chrome extension.
 This project is based on [zarazhangrui/tab-out](https://github.com/zarazhangrui/tab-out), originally created by [Zara](https://x.com/zarazhangrui) and licensed under the MIT License.  
 本项目基于 [zarazhangrui/tab-out](https://github.com/zarazhangrui/tab-out)，原作者是 [Zara](https://x.com/zarazhangrui)，并采用 MIT 协议。
 
-Modified by [XerPhong](https://github.com/xerphong) with custom quick links, local-only config, and additional dashboard refinements.  
-本 fork 由 [XerPhong](https://github.com/xerphong) 修改，加入了自定义快速链接、本地私有配置以及额外的面板优化。
+Modified by [XerPhong](https://github.com/xerphong) with additional tab management features and workflow refinements.  
+本 fork 由 [XerPhong](https://github.com/xerphong) 修改，加入了额外的标签管理功能和使用流程优化。
 
 Many thanks to the original author for the idea and foundation.  
 感谢原作者提供的创意与基础实现。
