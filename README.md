@@ -8,12 +8,22 @@ No server. No account. No external API calls. Just a Chrome extension.
 
 ---
 
+## Attribution
+
+This project is based on [zarazhangrui/tab-out](https://github.com/zarazhangrui/tab-out), originally created by [Zara](https://x.com/zarazhangrui) and licensed under the MIT License.
+
+Modified by [XerPhong](https://github.com/xerphong) with custom quick links, local-only config, and additional dashboard refinements.
+
+Many thanks to the original author for the idea and foundation.
+
+---
+
 ## Install with a coding agent
 
 Send your coding agent (Claude Code, Codex, etc.) this repo and say **"install this"**:
 
 ```
-https://github.com/zarazhangrui/tab-out
+https://github.com/xerphong/tab-out
 ```
 
 The agent will walk you through it. Takes about 1 minute.
