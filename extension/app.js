@@ -1093,6 +1093,10 @@ function getDuplicateSummary(tabs) {
   };
 }
 
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function closeOneTabByUrl(url, { preserveFixedHidden = false } = {}) {
   if (!url) return false;
 
@@ -1752,18 +1756,11 @@ document.addEventListener('click', async (e) => {
       chip.style.transition = 'opacity 0.2s, transform 0.2s';
       chip.style.opacity    = '0';
       chip.style.transform  = 'scale(0.8)';
-      setTimeout(() => {
-        chip.remove();
-        // If the card now has no tabs, remove it too
-        const parentCard = document.querySelector('.mission-card:has(.mission-pages:empty)');
-        if (parentCard) animateCardOut(parentCard);
-        document.querySelectorAll('.mission-card').forEach(c => {
-          if (c.querySelectorAll('.page-chip[data-action="focus-tab"]').length === 0) {
-            animateCardOut(c);
-          }
-        });
-      }, 200);
+      await wait(200);
+      chip.remove();
     }
+
+    await renderDashboard();
 
     // Update footer
     const statTabs = document.getElementById('statTabs');
@@ -1798,11 +1795,12 @@ document.addEventListener('click', async (e) => {
       chip.style.transition = 'opacity 0.2s, transform 0.2s';
       chip.style.opacity    = '0';
       chip.style.transform  = 'scale(0.8)';
-      setTimeout(() => chip.remove(), 200);
+      await wait(200);
+      chip.remove();
     }
 
+    await renderDashboard();
     showToast('Saved for later');
-    await renderDeferredColumn();
     return;
   }
 
