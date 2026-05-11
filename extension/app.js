@@ -1456,13 +1456,13 @@ function renderDomainCard(group) {
   }).join('') + (extraCount > 0 ? buildOverflowChips(uniqueTabs.slice(8), urlCounts) : '');
 
   let actionsHtml = `
-    <button class="action-btn save-tabs" data-action="defer-domain-tabs" data-domain-id="${stableId}">
-      ${ICONS.tabs}
-      Save all ${tabCount}
-    </button>
     <button class="action-btn close-tabs" data-action="close-domain-tabs" data-domain-id="${stableId}">
       ${ICONS.close}
-      Close all ${tabCount} tab${tabCount !== 1 ? 's' : ''}
+      Close All
+    </button>
+    <button class="action-btn save-tabs" data-action="defer-domain-tabs" data-domain-id="${stableId}">
+      ${ICONS.tabs}
+      Save All
     </button>`;
 
   if (!isLanding && !group.splitKeyword) {

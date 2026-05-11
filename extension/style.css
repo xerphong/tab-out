@@ -11,6 +11,8 @@
   --muted: #9a958d;
   --accent-amber: #e39b63;
   --accent-sage: #84a88d;
+  --accent-tech-blue: #4ea3ff;
+  --accent-tech-blue-deep: #2f7fe0;
   --accent-slate: #7b8f9c;
   --accent-rose: #c07070;
   --status-active: #79b28d;
@@ -670,9 +672,14 @@ header {
   background: rgba(243, 238, 231, 0.12);
 }
 
+.chip-save {
+  color: var(--accent-tech-blue);
+  opacity: 0.78;
+}
+
 .chip-save:hover {
-  color: var(--accent-sage);
-  background: rgba(132, 168, 141, 0.18);
+  color: var(--accent-tech-blue);
+  background: rgba(78, 163, 255, 0.18);
 }
 
 .chip-close:hover {
@@ -726,12 +733,14 @@ header {
   margin-top: 10px;
 }
 
-.action-btn {
+.action-btn,
+.deferred-group-dismiss,
+.deferred-group-restore {
   font-size: 11px;
   font-family: 'DM Sans', sans-serif;
   font-weight: 500;
-  padding: 5px 14px;
-  border-radius: 4px;
+  padding: 6px 14px;
+  border-radius: 999px;
   border: 1px solid var(--warm-gray);
   background: var(--card-bg);
   color: var(--muted);
@@ -762,26 +771,29 @@ header {
   opacity: 0.85;
 }
 
-.action-btn.close-tabs {
+.action-btn.close-tabs,
+.deferred-group-dismiss {
   border-color: rgba(227, 155, 99, 0.48);
   color: var(--accent-amber);
   background: rgba(227, 155, 99, 0.18);
 }
 
-.action-btn.close-tabs:hover {
+.action-btn.close-tabs:hover,
+.deferred-group-dismiss:hover {
   background: rgba(227, 155, 99, 0.26);
   border-color: var(--accent-amber);
+  color: var(--accent-amber);
 }
 
 .action-btn.save-tabs {
-  border-color: rgba(132, 168, 141, 0.46);
-  color: var(--accent-sage);
-  background: rgba(132, 168, 141, 0.17);
+  border-color: rgba(78, 163, 255, 0.48);
+  color: var(--accent-tech-blue);
+  background: rgba(78, 163, 255, 0.17);
 }
 
 .action-btn.save-tabs:hover {
-  background: rgba(132, 168, 141, 0.25);
-  border-color: var(--accent-sage);
+  background: rgba(78, 163, 255, 0.24);
+  border-color: var(--accent-tech-blue);
 }
 
 .action-btn.split-tabs {
@@ -1067,7 +1079,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 .update-banner-icon {
   width: 16px;
   height: 16px;
-  color: var(--accent-sage);
+  color: var(--accent-tech-blue);
   flex-shrink: 0;
   opacity: 0.85;
 }
@@ -1094,7 +1106,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   font-size: 12px;
   font-weight: 500;
   color: #fff;
-  background: var(--accent-sage);
+  background: var(--accent-tech-blue);
   border: none;
   border-radius: 5px;
   padding: 5px 12px;
@@ -1105,7 +1117,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 }
 
 .update-banner-btn:hover {
-  background: #4a6952; /* slightly darker sage */
+  background: var(--accent-tech-blue-deep);
 }
 
 .update-banner-btn:disabled {
@@ -1273,42 +1285,16 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   padding-left: 22px;
 }
 
-.deferred-group-dismiss {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 11px;
-  color: var(--accent-amber);
-  background: rgba(227, 155, 99, 0.18);
-  border: 1px solid rgba(227, 155, 99, 0.48);
-  border-radius: 999px;
-  padding: 5px 9px;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
-}
-
-.deferred-group-dismiss:hover {
-  color: var(--accent-amber);
-  border-color: var(--accent-amber);
-  background: rgba(227, 155, 99, 0.26);
-}
-
 .deferred-group-restore {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 11px;
-  color: var(--accent-sage);
-  background: rgba(132, 168, 141, 0.12);
-  border: 1px solid rgba(132, 168, 141, 0.3);
-  border-radius: 999px;
-  padding: 5px 9px;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  color: var(--accent-tech-blue);
+  background: rgba(78, 163, 255, 0.12);
+  border: 1px solid rgba(78, 163, 255, 0.32);
 }
 
 .deferred-group-restore:hover {
   color: var(--ink);
-  border-color: var(--accent-sage);
-  background: rgba(132, 168, 141, 0.22);
+  border-color: var(--accent-tech-blue);
+  background: rgba(78, 163, 255, 0.22);
 }
 
 .deferred-group-body {
@@ -1375,23 +1361,28 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 .deferred-dismiss {
   background: none;
   border: none;
-  color: var(--muted);
+  color: #beb7ae;
   cursor: pointer;
-  padding: 2px;
-  opacity: 0.3;
-  transition: opacity 0.15s, color 0.15s;
+  padding: 4px;
+  border-radius: 4px;
+  opacity: 0.58;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
   flex-shrink: 0;
-  margin-top: 1px;
+  margin-top: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .deferred-dismiss svg {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
 }
 
 .deferred-dismiss:hover {
   opacity: 1;
   color: var(--status-abandoned);
+  background: rgba(196, 102, 102, 0.18);
 }
 
 /* Slide-out animation for items being removed */
