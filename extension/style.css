@@ -558,12 +558,11 @@ header {
 .open-tabs-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
   font-size: 10px;
   font-weight: 500;
-  color: var(--accent-amber);
-  background: rgba(208, 138, 87, 0.14);
-  padding: 2px 8px;
+  color: var(--muted);
+  background: rgba(154, 149, 141, 0.12);
+  padding: 2px 7px;
   border-radius: 3px;
 }
 
@@ -1191,8 +1190,9 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 
 .deferred-group-header {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
   padding: 10px 12px;
 }
 
@@ -1202,12 +1202,19 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   border: none;
   color: var(--ink);
   display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
   min-width: 0;
   cursor: pointer;
   text-align: left;
+  width: 100%;
+}
+
+.deferred-group-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .deferred-group-toggle:hover .deferred-group-title {
@@ -1253,18 +1260,25 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 .deferred-group-count {
   font-size: 11px;
   color: var(--muted);
-  padding: 2px 8px;
+  padding: 2px 7px;
   border-radius: 999px;
   background: rgba(154, 149, 141, 0.12);
   flex-shrink: 0;
 }
 
+.deferred-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 22px;
+}
+
 .deferred-group-dismiss {
   font-family: 'DM Sans', sans-serif;
   font-size: 11px;
-  color: var(--muted);
-  background: none;
-  border: 1px solid rgba(154, 149, 141, 0.18);
+  color: var(--accent-amber);
+  background: rgba(227, 155, 99, 0.18);
+  border: 1px solid rgba(227, 155, 99, 0.48);
   border-radius: 999px;
   padding: 5px 9px;
   cursor: pointer;
@@ -1273,9 +1287,28 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 }
 
 .deferred-group-dismiss:hover {
-  color: var(--status-abandoned);
-  border-color: rgba(196, 102, 102, 0.35);
-  background: rgba(196, 102, 102, 0.08);
+  color: var(--accent-amber);
+  border-color: var(--accent-amber);
+  background: rgba(227, 155, 99, 0.26);
+}
+
+.deferred-group-restore {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  color: var(--accent-sage);
+  background: rgba(132, 168, 141, 0.12);
+  border: 1px solid rgba(132, 168, 141, 0.3);
+  border-radius: 999px;
+  padding: 5px 9px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.deferred-group-restore:hover {
+  color: var(--ink);
+  border-color: var(--accent-sage);
+  background: rgba(132, 168, 141, 0.22);
 }
 
 .deferred-group-body {
@@ -1305,43 +1338,6 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 
 .deferred-item:last-child {
   border-bottom: none;
-}
-
-/* Custom checkbox */
-.deferred-checkbox {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 18px;
-  height: 18px;
-  border: 2px solid var(--warm-gray);
-  border-radius: 4px;
-  cursor: pointer;
-  flex-shrink: 0;
-  margin-top: 1px;
-  transition: all 0.2s;
-  position: relative;
-}
-
-.deferred-checkbox:hover {
-  border-color: var(--accent-sage);
-}
-
-.deferred-checkbox:checked {
-  background: var(--accent-sage);
-  border-color: var(--accent-sage);
-}
-
-/* Checkmark inside the checkbox */
-.deferred-checkbox:checked::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 5px;
-  width: 4px;
-  height: 8px;
-  border: solid white;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
 }
 
 /* Item content (title, domain, time) */
@@ -1375,15 +1371,6 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 }
 
 /* Checked-off item — strikethrough + faded */
-.deferred-item.checked .deferred-title {
-  text-decoration: line-through;
-  color: var(--muted);
-}
-
-.deferred-item.checked .deferred-meta {
-  opacity: 0.5;
-}
-
 /* Dismiss (X) button */
 .deferred-dismiss {
   background: none;

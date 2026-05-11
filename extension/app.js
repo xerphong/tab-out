@@ -110,6 +110,13 @@ async function closeTabsExact(urls) {
   await fetchOpenTabs();
 }
 
+async function closeTabsByIds(tabIds) {
+  const ids = Array.from(new Set((tabIds || []).filter(id => Number.isInteger(id))));
+  if (ids.length === 0) return;
+  await chrome.tabs.remove(ids);
+  await fetchOpenTabs();
+}
+
 /**
  * focusTab(url)
  *
@@ -228,6 +235,14 @@ async function closeTabOutDupes() {
  */
 async function saveTabForLater(tab) {
   const { deferred = [] } = await chrome.storage.local.get('deferred');
+  const savedGroup = tab.savedGroup && typeof tab.savedGroup === 'object'
+    ? {
+        id: tab.savedGroup.id || '',
+        domain: tab.savedGroup.domain || '',
+        label: tab.savedGroup.label || '',
+        splitKeyword: tab.savedGroup.splitKeyword || '',
+      }
+    : null;
   deferred.unshift({
     id:        Date.now().toString(),
     url:       tab.url,
@@ -235,6 +250,7 @@ async function saveTabForLater(tab) {
     savedAt:   new Date().toISOString(),
     completed: false,
     dismissed: false,
+    savedGroup,
   });
   await chrome.storage.local.set({ deferred });
 }
@@ -248,26 +264,11 @@ async function saveTabForLater(tab) {
  */
 async function getSavedTabs() {
   const { deferred = [] } = await chrome.storage.local.get('deferred');
-  const visible = deferred.filter(t => !t.dismissed);
+  const visible = deferred.filter(t => !t.dismissed && !t.completed);
   return {
-    active:   visible.filter(t => !t.completed),
-    archived: visible.filter(t => t.completed),
+    active:   visible,
+    archived: [],
   };
-}
-
-/**
- * checkOffSavedTab(id)
- *
- * Marks a saved tab as completed (checked off). It moves to the archive.
- */
-async function checkOffSavedTab(id) {
-  const { deferred = [] } = await chrome.storage.local.get('deferred');
-  const tab = deferred.find(t => t.id === id);
-  if (tab) {
-    tab.completed = true;
-    tab.completedAt = new Date().toISOString();
-    await chrome.storage.local.set({ deferred });
-  }
 }
 
 /**
@@ -290,8 +291,7 @@ async function dismissSavedDomain(domainKey) {
 
   for (const item of deferred) {
     if (item.completed || item.dismissed) continue;
-    const info = deferredDomainInfo(item.url);
-    if (info.domain.toLowerCase() === String(domainKey || '').toLowerCase()) {
+    if (getDeferredGroupKey(item) === String(domainKey || '').toLowerCase()) {
       item.dismissed = true;
       changed = true;
     }
@@ -300,6 +300,32 @@ async function dismissSavedDomain(domainKey) {
   if (changed) {
     await chrome.storage.local.set({ deferred });
   }
+}
+
+async function restoreSavedDomain(domainKey) {
+  const { deferred = [] } = await chrome.storage.local.get('deferred');
+  const targetKey = String(domainKey || '').toLowerCase();
+  const items = deferred.filter(item =>
+    !item.completed &&
+    !item.dismissed &&
+    getDeferredGroupKey(item) === targetKey
+  );
+
+  if (items.length === 0) return 0;
+
+  for (const item of items.slice().reverse()) {
+    if (!item.url) continue;
+    await chrome.tabs.create({ url: item.url, active: false });
+  }
+
+  for (const item of deferred) {
+    if (!item.completed && !item.dismissed && getDeferredGroupKey(item) === targetKey) {
+      item.dismissed = true;
+    }
+  }
+
+  await chrome.storage.local.set({ deferred });
+  return items.length;
 }
 
 
@@ -976,18 +1002,43 @@ function deferredDomainInfo(url) {
   }
 }
 
+function normalizeSavedGroup(savedGroup = null) {
+  if (!savedGroup || typeof savedGroup !== 'object') return null;
+
+  const id = typeof savedGroup.id === 'string' ? savedGroup.id.trim() : '';
+  const domain = typeof savedGroup.domain === 'string' ? savedGroup.domain.trim() : '';
+  const label = typeof savedGroup.label === 'string' ? savedGroup.label.trim() : '';
+  const splitKeyword = typeof savedGroup.splitKeyword === 'string' ? savedGroup.splitKeyword.trim() : '';
+
+  if (!id && !domain && !label && !splitKeyword) return null;
+  return { id, domain, label, splitKeyword };
+}
+
+function getDeferredGroupKey(item) {
+  const savedGroup = normalizeSavedGroup(item?.savedGroup);
+  if (savedGroup?.id) return savedGroup.id.toLowerCase();
+  if (savedGroup?.domain && savedGroup?.splitKeyword) {
+    return `${savedGroup.domain}::title-split::${savedGroup.splitKeyword.toLowerCase()}`.toLowerCase();
+  }
+  if (savedGroup?.domain) return savedGroup.domain.toLowerCase();
+  return deferredDomainInfo(item?.url).domain.toLowerCase();
+}
+
 function groupDeferredTabsByDomain(items = []) {
   const groups = new Map();
 
   for (const item of items) {
     const info = deferredDomainInfo(item.url);
-    const key = info.domain.toLowerCase();
+    const savedGroup = normalizeSavedGroup(item.savedGroup);
+    const key = getDeferredGroupKey(item);
     if (!groups.has(key)) {
       groups.set(key, {
         key,
-        domain: info.domain,
-        label: info.label,
+        id: savedGroup?.id || key,
+        domain: savedGroup?.domain || info.domain,
+        label: savedGroup?.label || info.label,
         hostname: info.hostname,
+        splitKeyword: savedGroup?.splitKeyword || '',
         items: [],
       });
     }
@@ -999,7 +1050,7 @@ function groupDeferredTabsByDomain(items = []) {
       ...group,
       items: group.items.slice().sort((a, b) => new Date(b.savedAt || 0) - new Date(a.savedAt || 0)),
     }))
-    .sort((a, b) => a.domain.localeCompare(b.domain, undefined, { sensitivity: 'base' }));
+    .sort((a, b) => (a.label || a.domain).localeCompare((b.label || b.domain), undefined, { sensitivity: 'base' }));
 }
 
 function isDeferredGroupCollapsed(groupKey) {
@@ -1357,10 +1408,7 @@ function renderDomainCard(group) {
   const hasDupes   = dupeUrls.length > 0;
   const totalExtras = dupeUrls.reduce((s, [, c]) => s + c - 1, 0);
 
-  const tabBadge = `<span class="open-tabs-badge">
-    ${ICONS.tabs}
-    ${tabCount} tab${tabCount !== 1 ? 's' : ''} open
-  </span>`;
+  const tabBadge = `<span class="open-tabs-badge">${tabCount}</span>`;
 
   const dupeBadge = hasDupes
     ? `<span class="open-tabs-badge" style="color:var(--accent-amber);background:rgba(200,113,58,0.08);">
@@ -1408,6 +1456,10 @@ function renderDomainCard(group) {
   }).join('') + (extraCount > 0 ? buildOverflowChips(uniqueTabs.slice(8), urlCounts) : '');
 
   let actionsHtml = `
+    <button class="action-btn save-tabs" data-action="defer-domain-tabs" data-domain-id="${stableId}">
+      ${ICONS.tabs}
+      Save all ${tabCount}
+    </button>
     <button class="action-btn close-tabs" data-action="close-domain-tabs" data-domain-id="${stableId}">
       ${ICONS.close}
       Close all ${tabCount} tab${tabCount !== 1 ? 's' : ''}
@@ -1471,18 +1523,15 @@ async function renderDeferredColumn() {
   const list           = document.getElementById('deferredList');
   const empty          = document.getElementById('deferredEmpty');
   const countEl        = document.getElementById('deferredCount');
-  const archiveEl      = document.getElementById('deferredArchive');
-  const archiveCountEl = document.getElementById('archiveCount');
-  const archiveList    = document.getElementById('archiveList');
 
   if (!column) return;
 
   try {
-    const { active, archived } = await getSavedTabs();
+    const { active } = await getSavedTabs();
     const activeGroups = groupDeferredTabsByDomain(active);
 
     // Hide the entire column if there's nothing to show
-    if (active.length === 0 && archived.length === 0) {
+    if (active.length === 0) {
       column.style.display = 'none';
       return;
     }
@@ -1501,15 +1550,6 @@ async function renderDeferredColumn() {
       empty.style.display = 'block';
     }
 
-    // Render archive section
-    if (archived.length > 0) {
-      archiveCountEl.textContent = `(${archived.length})`;
-      archiveList.innerHTML = archived.map(item => renderArchiveItem(item)).join('');
-      archiveEl.style.display = 'block';
-    } else {
-      archiveEl.style.display = 'none';
-    }
-
   } catch (err) {
     console.warn('[tab-out] Could not load saved tabs:', err);
     column.style.display = 'none';
@@ -1519,8 +1559,7 @@ async function renderDeferredColumn() {
 /**
  * renderDeferredItem(item)
  *
- * Builds HTML for one active checklist item: checkbox, title link,
- * domain, time ago, dismiss button.
+ * Builds HTML for one active saved item: title link, domain, time ago, dismiss button.
  */
 function renderDeferredItem(item) {
   const { hostname, domain } = deferredDomainInfo(item.url);
@@ -1529,7 +1568,6 @@ function renderDeferredItem(item) {
 
   return `
     <div class="deferred-item" data-deferred-id="${item.id}">
-      <input type="checkbox" class="deferred-checkbox" data-action="check-deferred" data-deferred-id="${item.id}">
       <div class="deferred-info">
         <a href="${item.url}" target="_blank" rel="noopener" class="deferred-title" title="${(item.title || '').replace(/"/g, '&quot;')}">
           ${faviconUrl ? `<img src="${faviconUrl}" alt="" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px" onerror="this.style.display='none'">` : ''}${item.title || item.url}
@@ -1555,39 +1593,29 @@ function renderDeferredGroup(group) {
     <section class="deferred-group" data-domain-key="${group.key}">
       <div class="deferred-group-header">
         <button class="deferred-group-toggle ${isCollapsed ? '' : 'open'}" data-action="toggle-deferred-group" data-domain-key="${group.key}">
-          <svg class="deferred-group-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
-          <span class="deferred-group-title-wrap">
-            ${faviconUrl ? `<img src="${faviconUrl}" alt="" class="deferred-group-favicon" onerror="this.style.display='none'">` : ''}
-            <span class="deferred-group-title">${group.label}</span>
+          <span class="deferred-group-title-row">
+            <svg class="deferred-group-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+            <span class="deferred-group-title-wrap">
+              ${faviconUrl ? `<img src="${faviconUrl}" alt="" class="deferred-group-favicon" onerror="this.style.display='none'">` : ''}
+              <span class="deferred-group-title">${group.label}</span>
+            </span>
+            <span class="deferred-group-count">${itemCount}</span>
           </span>
-          <span class="deferred-group-count">${itemCount}</span>
         </button>
-        <button class="deferred-group-dismiss" data-action="dismiss-deferred-domain" data-domain-key="${group.key}" data-domain-label="${group.label.replace(/"/g, '&quot;')}" title="Close this saved domain">
-          Close all
-        </button>
+        <div class="deferred-group-actions">
+          <button class="deferred-group-dismiss" data-action="dismiss-deferred-domain" data-domain-key="${group.key}" data-domain-label="${group.label.replace(/"/g, '&quot;')}" title="Close this saved domain">
+            Close all
+          </button>
+          <button class="deferred-group-restore" data-action="restore-deferred-domain" data-domain-key="${group.key}" data-domain-label="${group.label.replace(/"/g, '&quot;')}" title="Restore this saved domain">
+            Restore all
+          </button>
+        </div>
       </div>
       <div class="deferred-group-body" style="display:${bodyDisplay}">
         ${group.items.map(item => renderDeferredItem(item)).join('')}
       </div>
     </section>`;
 }
-
-/**
- * renderArchiveItem(item)
- *
- * Builds HTML for one completed/archived item (simpler: just title + date).
- */
-function renderArchiveItem(item) {
-  const ago = item.completedAt ? timeAgo(item.completedAt) : timeAgo(item.savedAt);
-  return `
-    <div class="archive-item">
-      <a href="${item.url}" target="_blank" rel="noopener" class="archive-item-title" title="${(item.title || '').replace(/"/g, '&quot;')}">
-        ${item.title || item.url}
-      </a>
-      <span class="archive-item-date">${ago}</span>
-    </div>`;
-}
-
 
 /* ----------------------------------------------------------------
    MAIN DASHBOARD RENDERER
@@ -1803,7 +1831,17 @@ document.addEventListener('click', async (e) => {
 
     // Save to chrome.storage.local
     try {
-      await saveTabForLater({ url: tabUrl, title: tabTitle });
+      const group = groupId ? findDomainGroupById(groupId) : null;
+      await saveTabForLater({
+        url: tabUrl,
+        title: tabTitle,
+        savedGroup: group ? {
+          id: getGroupStableId(group),
+          domain: group.domain,
+          label: group.label || (group.domain === '__landing-pages__' ? 'Homepages' : friendlyDomain(group.domain)),
+          splitKeyword: group.splitKeyword || '',
+        } : null,
+      });
     } catch (err) {
       console.error('[tab-out] Failed to save tab:', err);
       showToast('Failed to save tab');
@@ -1832,25 +1870,47 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // ---- Check off a saved tab (moves it to archive) ----
-  if (action === 'check-deferred') {
-    const id = actionEl.dataset.deferredId;
-    if (!id) return;
+  if (action === 'defer-domain-tabs') {
+    e.stopPropagation();
+    const domainId = actionEl.dataset.domainId;
+    const group = findDomainGroupById(domainId);
+    const card = actionEl.closest('.mission-card');
+    if (!group || !group.tabs?.length) return;
 
-    await checkOffSavedTab(id);
-
-    // Animate: strikethrough first, then slide out
-    const item = actionEl.closest('.deferred-item');
-    if (item) {
-      item.classList.add('checked');
-      setTimeout(() => {
-        item.classList.add('removing');
-        setTimeout(() => {
-          item.remove();
-          renderDeferredColumn(); // refresh counts and archive
-        }, 300);
-      }, 800);
+    try {
+      for (const tab of group.tabs) {
+        await saveTabForLater({
+          url: tab.url,
+          title: cleanTitle(smartTitle(stripTitleNoise(tab.title || ''), tab.url), group.domain),
+          savedGroup: {
+            id: getGroupStableId(group),
+            domain: group.domain,
+            label: group.label || (group.domain === '__landing-pages__' ? 'Homepages' : friendlyDomain(group.domain)),
+            splitKeyword: group.splitKeyword || '',
+          },
+        });
+      }
+    } catch (err) {
+      console.error('[tab-out] Failed to save domain group:', err);
+      showToast('Failed to save group');
+      return;
     }
+
+    const tabIdsToClose = group.tabs
+      .filter(tab => !isPinnedTab(tab))
+      .map(tab => tab.id)
+      .filter(Number.isInteger);
+    const pinnedDuplicateUrls = Array.from(new Set(
+      group.tabs.filter(isPinnedTab).map(tab => tab.url).filter(Boolean)
+    ));
+
+    if (tabIdsToClose.length > 0) await closeTabsByIds(tabIdsToClose);
+    if (pinnedDuplicateUrls.length > 0) await closeDuplicateTabs(pinnedDuplicateUrls, true);
+
+    playCloseSound();
+    if (card) animateCardOut(card);
+    await renderDashboard();
+    showToast(`Saved ${group.tabs.length} tab${group.tabs.length !== 1 ? 's' : ''} from ${group.label || friendlyDomain(group.domain)}`);
     return;
   }
 
@@ -1894,29 +1954,35 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
+  if (action === 'restore-deferred-domain') {
+    const domainKey = actionEl.dataset.domainKey;
+    const domainLabel = actionEl.dataset.domainLabel || 'this domain';
+    if (!domainKey) return;
+
+    const restoredCount = await restoreSavedDomain(domainKey);
+    if (restoredCount === 0) return;
+
+    await renderDashboard();
+    showToast(`Restored ${restoredCount} tab${restoredCount !== 1 ? 's' : ''} from ${domainLabel}`);
+    return;
+  }
+
   // ---- Close all tabs in a domain group ----
   if (action === 'close-domain-tabs') {
     const domainId = actionEl.dataset.domainId;
     const group    = findDomainGroupById(domainId);
     if (!group) return;
 
-    const urlCounts = {};
-    const pinnedUrls = new Set();
-    for (const tab of group.tabs) {
-      if (!tab.url) continue;
-      urlCounts[tab.url] = (urlCounts[tab.url] || 0) + 1;
-      if (isPinnedTab(tab)) pinnedUrls.add(tab.url);
-    }
+    const regularTabIds = group.tabs
+      .filter(tab => !isPinnedTab(tab))
+      .map(tab => tab.id)
+      .filter(Number.isInteger);
+    const pinnedDuplicateUrls = Array.from(new Set(
+      group.tabs.filter(isPinnedTab).map(tab => tab.url).filter(Boolean)
+    ));
+    const closedCount = regularTabIds.length + pinnedDuplicateUrls.length;
 
-    const uniqueUrls = Object.keys(urlCounts);
-    const pinnedDuplicateUrls = uniqueUrls.filter(url => pinnedUrls.has(url));
-    const regularUrls = uniqueUrls.filter(url => !pinnedUrls.has(url));
-    const closedCount = uniqueUrls.reduce((sum, url) => {
-      const count = urlCounts[url] || 0;
-      return sum + (pinnedUrls.has(url) ? Math.max(count - 1, 0) : count);
-    }, 0);
-
-    if (regularUrls.length > 0) await closeTabsExact(regularUrls);
+    if (regularTabIds.length > 0) await closeTabsByIds(regularTabIds);
     if (pinnedDuplicateUrls.length > 0) await closeDuplicateTabs(pinnedDuplicateUrls, true);
 
     if (card) {
