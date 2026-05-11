@@ -747,6 +747,168 @@ function findDomainGroupById(groupId) {
   return domainGroups.find(group => getGroupStableId(group) === groupId);
 }
 
+async function rebuildDomainGroupsFromOpenTabs() {
+  const realTabs = getRealTabs();
+  const dashboardTabs = getDashboardTabs(realTabs);
+  const { totalExtras: totalDuplicateExtras } = getDuplicateSummary(dashboardTabs);
+
+  const LANDING_PAGE_PATTERNS = [
+    { hostname: 'mail.google.com', test: (p, h) =>
+        !h.includes('#inbox/') && !h.includes('#sent/') && !h.includes('#search/') },
+    { hostname: 'x.com',               pathExact: ['/home'] },
+    { hostname: 'www.linkedin.com',    pathExact: ['/'] },
+    { hostname: 'github.com',          pathExact: ['/'] },
+    { hostname: 'www.youtube.com',     pathExact: ['/'] },
+    ...(typeof LOCAL_LANDING_PAGE_PATTERNS !== 'undefined' ? LOCAL_LANDING_PAGE_PATTERNS : []),
+  ];
+
+  function isLandingPage(url) {
+    try {
+      const parsed = new URL(url);
+      return LANDING_PAGE_PATTERNS.some(p => {
+        const hostnameMatch = p.hostname
+          ? parsed.hostname === p.hostname
+          : p.hostnameEndsWith
+            ? parsed.hostname.endsWith(p.hostnameEndsWith)
+            : false;
+        if (!hostnameMatch) return false;
+        if (p.test)       return p.test(parsed.pathname, url);
+        if (p.pathPrefix) return parsed.pathname.startsWith(p.pathPrefix);
+        if (p.pathExact)  return p.pathExact.includes(parsed.pathname);
+        return parsed.pathname === '/';
+      });
+    } catch { return false; }
+  }
+
+  const nextGroups = [];
+  const groupMap = {};
+  const landingTabs = [];
+  const domainSplitRules = await getDomainSplitRules();
+  const customGroups = typeof LOCAL_CUSTOM_GROUPS !== 'undefined' ? LOCAL_CUSTOM_GROUPS : [];
+
+  function matchCustomGroup(url) {
+    try {
+      const parsed = new URL(url);
+      return customGroups.find(r => {
+        const hostMatch = r.hostname
+          ? parsed.hostname === r.hostname
+          : r.hostnameEndsWith
+            ? parsed.hostname.endsWith(r.hostnameEndsWith)
+            : false;
+        if (!hostMatch) return false;
+        if (r.pathPrefix) return parsed.pathname.startsWith(r.pathPrefix);
+        return true;
+      }) || null;
+    } catch { return null; }
+  }
+
+  for (const tab of dashboardTabs) {
+    try {
+      if (isLandingPage(tab.url)) {
+        landingTabs.push(tab);
+        continue;
+      }
+
+      const customRule = matchCustomGroup(tab.url);
+      if (customRule) {
+        const key = customRule.groupKey;
+        if (!groupMap[key]) groupMap[key] = { domain: key, label: customRule.groupLabel, tabs: [] };
+        groupMap[key].tabs.push(tab);
+        continue;
+      }
+
+      let hostname;
+      if (tab.url && tab.url.startsWith('file://')) {
+        hostname = 'local-files';
+      } else {
+        hostname = new URL(tab.url).hostname;
+      }
+      if (!hostname) continue;
+
+      const splitRule = matchDomainSplitRule(hostname, tab.title, domainSplitRules);
+      if (splitRule) {
+        const splitKey = `${hostname}::title-split::${splitRule.keyword.toLowerCase()}`;
+        if (!groupMap[splitKey]) {
+          groupMap[splitKey] = {
+            id: splitKey,
+            domain: hostname,
+            label: `${friendlyDomain(hostname)} + ${splitRule.keyword}`,
+            splitKeyword: splitRule.keyword,
+            tabs: [],
+          };
+        }
+        groupMap[splitKey].tabs.push(tab);
+        continue;
+      }
+
+      if (!groupMap[hostname]) groupMap[hostname] = { id: hostname, domain: hostname, tabs: [] };
+      groupMap[hostname].tabs.push(tab);
+    } catch {
+      // Skip malformed URLs
+    }
+  }
+
+  if (landingTabs.length > 0) {
+    groupMap['__landing-pages__'] = { domain: '__landing-pages__', tabs: landingTabs };
+  }
+
+  const landingHostnames = new Set(LANDING_PAGE_PATTERNS.map(p => p.hostname).filter(Boolean));
+  const landingSuffixes = LANDING_PAGE_PATTERNS.map(p => p.hostnameEndsWith).filter(Boolean);
+  function isLandingDomain(domain) {
+    if (landingHostnames.has(domain)) return true;
+    return landingSuffixes.some(s => domain.endsWith(s));
+  }
+
+  nextGroups.push(...Object.values(groupMap).sort((a, b) => {
+    const aIsLanding = a.domain === '__landing-pages__';
+    const bIsLanding = b.domain === '__landing-pages__';
+    if (aIsLanding !== bIsLanding) return aIsLanding ? -1 : 1;
+
+    const aIsPriority = isLandingDomain(a.domain);
+    const bIsPriority = isLandingDomain(b.domain);
+    if (aIsPriority !== bIsPriority) return aIsPriority ? -1 : 1;
+
+    return b.tabs.length - a.tabs.length;
+  }));
+
+  domainGroups = nextGroups;
+  return { totalDuplicateExtras };
+}
+
+function updateOpenTabsUiCounts(totalDuplicateExtras = 0) {
+  const openTabsSectionCount = document.getElementById('openTabsSectionCount');
+  const statTabs = document.getElementById('statTabs');
+
+  if (openTabsSectionCount) {
+    const closeDuplicatesBtn = totalDuplicateExtras > 0
+      ? ` <button class="action-btn dedup-btn" data-action="close-all-duplicates" style="font-size:11px;padding:3px 10px;">
+            Close all ${totalDuplicateExtras} duplicate${totalDuplicateExtras !== 1 ? 's' : ''}
+          </button>`
+      : '';
+    openTabsSectionCount.innerHTML = `${domainGroups.length} domain${domainGroups.length !== 1 ? 's' : ''}${closeDuplicatesBtn}`;
+  }
+
+  if (statTabs) statTabs.textContent = openTabs.length;
+  checkTabOutDupes();
+}
+
+async function refreshSingleDomainCard(groupId, existingCard) {
+  const { totalDuplicateExtras } = await rebuildDomainGroupsFromOpenTabs();
+  const nextGroup = findDomainGroupById(groupId);
+
+  if (nextGroup && existingCard?.isConnected) {
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = renderDomainCard(nextGroup).trim();
+    const nextCard = wrapper.firstElementChild;
+    if (nextCard) existingCard.replaceWith(nextCard);
+  } else if (existingCard?.isConnected) {
+    animateCardOut(existingCard);
+  }
+
+  updateOpenTabsUiCounts(totalDuplicateExtras);
+  checkAndShowEmptyState();
+}
+
 function normalizeQuickLink(entry = {}) {
   return {
     title: typeof entry.title === 'string' ? entry.title.trim() : '',
@@ -1452,138 +1614,7 @@ async function renderStaticDashboard() {
 
   // --- Fetch tabs ---
   await fetchOpenTabs();
-  const realTabs = getRealTabs();
-  const dashboardTabs = getDashboardTabs(realTabs);
-  const { totalExtras: totalDuplicateExtras } = getDuplicateSummary(dashboardTabs);
-
-  // --- Group tabs by domain ---
-  // Landing pages (Gmail inbox, Twitter home, etc.) get their own special group
-  // so they can be closed together without affecting content tabs on the same domain.
-  const LANDING_PAGE_PATTERNS = [
-    { hostname: 'mail.google.com', test: (p, h) =>
-        !h.includes('#inbox/') && !h.includes('#sent/') && !h.includes('#search/') },
-    { hostname: 'x.com',               pathExact: ['/home'] },
-    { hostname: 'www.linkedin.com',    pathExact: ['/'] },
-    { hostname: 'github.com',          pathExact: ['/'] },
-    { hostname: 'www.youtube.com',     pathExact: ['/'] },
-    // Merge personal patterns from config.local.js (if it exists)
-    ...(typeof LOCAL_LANDING_PAGE_PATTERNS !== 'undefined' ? LOCAL_LANDING_PAGE_PATTERNS : []),
-  ];
-
-  function isLandingPage(url) {
-    try {
-      const parsed = new URL(url);
-      return LANDING_PAGE_PATTERNS.some(p => {
-        // Support both exact hostname and suffix matching (for wildcard subdomains)
-        const hostnameMatch = p.hostname
-          ? parsed.hostname === p.hostname
-          : p.hostnameEndsWith
-            ? parsed.hostname.endsWith(p.hostnameEndsWith)
-            : false;
-        if (!hostnameMatch) return false;
-        if (p.test)       return p.test(parsed.pathname, url);
-        if (p.pathPrefix) return parsed.pathname.startsWith(p.pathPrefix);
-        if (p.pathExact)  return p.pathExact.includes(parsed.pathname);
-        return parsed.pathname === '/';
-      });
-    } catch { return false; }
-  }
-
-  domainGroups = [];
-  const groupMap    = {};
-  const landingTabs = [];
-  const domainSplitRules = await getDomainSplitRules();
-
-  // Custom group rules from config.local.js (if any)
-  const customGroups = typeof LOCAL_CUSTOM_GROUPS !== 'undefined' ? LOCAL_CUSTOM_GROUPS : [];
-
-  // Check if a URL matches a custom group rule; returns the rule or null
-  function matchCustomGroup(url) {
-    try {
-      const parsed = new URL(url);
-      return customGroups.find(r => {
-        const hostMatch = r.hostname
-          ? parsed.hostname === r.hostname
-          : r.hostnameEndsWith
-            ? parsed.hostname.endsWith(r.hostnameEndsWith)
-            : false;
-        if (!hostMatch) return false;
-        if (r.pathPrefix) return parsed.pathname.startsWith(r.pathPrefix);
-        return true; // hostname matched, no path filter
-      }) || null;
-    } catch { return null; }
-  }
-
-  for (const tab of dashboardTabs) {
-    try {
-      if (isLandingPage(tab.url)) {
-        landingTabs.push(tab);
-        continue;
-      }
-
-      // Check custom group rules first (e.g. merge subdomains, split by path)
-      const customRule = matchCustomGroup(tab.url);
-      if (customRule) {
-        const key = customRule.groupKey;
-        if (!groupMap[key]) groupMap[key] = { domain: key, label: customRule.groupLabel, tabs: [] };
-        groupMap[key].tabs.push(tab);
-        continue;
-      }
-
-      let hostname;
-      if (tab.url && tab.url.startsWith('file://')) {
-        hostname = 'local-files';
-      } else {
-        hostname = new URL(tab.url).hostname;
-      }
-      if (!hostname) continue;
-
-      const splitRule = matchDomainSplitRule(hostname, tab.title, domainSplitRules);
-      if (splitRule) {
-        const splitKey = `${hostname}::title-split::${splitRule.keyword.toLowerCase()}`;
-        if (!groupMap[splitKey]) {
-          groupMap[splitKey] = {
-            id: splitKey,
-            domain: hostname,
-            label: `${friendlyDomain(hostname)} + ${splitRule.keyword}`,
-            splitKeyword: splitRule.keyword,
-            tabs: [],
-          };
-        }
-        groupMap[splitKey].tabs.push(tab);
-        continue;
-      }
-
-      if (!groupMap[hostname]) groupMap[hostname] = { id: hostname, domain: hostname, tabs: [] };
-      groupMap[hostname].tabs.push(tab);
-    } catch {
-      // Skip malformed URLs
-    }
-  }
-
-  if (landingTabs.length > 0) {
-    groupMap['__landing-pages__'] = { domain: '__landing-pages__', tabs: landingTabs };
-  }
-
-  // Sort: landing pages first, then domains from landing page sites, then by tab count
-  // Collect exact hostnames and suffix patterns for priority sorting
-  const landingHostnames = new Set(LANDING_PAGE_PATTERNS.map(p => p.hostname).filter(Boolean));
-  const landingSuffixes = LANDING_PAGE_PATTERNS.map(p => p.hostnameEndsWith).filter(Boolean);
-  function isLandingDomain(domain) {
-    if (landingHostnames.has(domain)) return true;
-    return landingSuffixes.some(s => domain.endsWith(s));
-  }
-  domainGroups = Object.values(groupMap).sort((a, b) => {
-    const aIsLanding = a.domain === '__landing-pages__';
-    const bIsLanding = b.domain === '__landing-pages__';
-    if (aIsLanding !== bIsLanding) return aIsLanding ? -1 : 1;
-
-    const aIsPriority = isLandingDomain(a.domain);
-    const bIsPriority = isLandingDomain(b.domain);
-    if (aIsPriority !== bIsPriority) return aIsPriority ? -1 : 1;
-
-    return b.tabs.length - a.tabs.length;
-  });
+  const { totalDuplicateExtras } = await rebuildDomainGroupsFromOpenTabs();
 
   // --- Render domain cards ---
   const openTabsSection      = document.getElementById('openTabsSection');
@@ -1597,12 +1628,6 @@ async function renderStaticDashboard() {
 
   if (domainGroups.length > 0 && openTabsSection) {
     if (openTabsSectionTitle) openTabsSectionTitle.textContent = 'Open tabs';
-    const closeDuplicatesBtn = totalDuplicateExtras > 0
-      ? ` <button class="action-btn dedup-btn" data-action="close-all-duplicates" style="font-size:11px;padding:3px 10px;">
-            Close all ${totalDuplicateExtras} duplicate${totalDuplicateExtras !== 1 ? 's' : ''}
-          </button>`
-      : '';
-    openTabsSectionCount.innerHTML = `${domainGroups.length} domain${domainGroups.length !== 1 ? 's' : ''}${closeDuplicatesBtn}`;
     openTabsMissionsEl.innerHTML = domainGroups.map(g => renderDomainCard(g)).join('');
     openTabsSection.style.display = 'block';
   } else {
@@ -1611,12 +1636,7 @@ async function renderStaticDashboard() {
     if (openTabsMissionsEl) openTabsMissionsEl.innerHTML = '';
   }
 
-  // --- Footer stats ---
-  const statTabs = document.getElementById('statTabs');
-  if (statTabs) statTabs.textContent = openTabs.length;
-
-  // --- Check for duplicate Tab Out tabs ---
-  checkTabOutDupes();
+  updateOpenTabsUiCounts(totalDuplicateExtras);
 
   // --- Render "Saved for Later" column ---
   await renderDeferredColumn();
@@ -1742,6 +1762,8 @@ document.addEventListener('click', async (e) => {
     e.stopPropagation(); // don't trigger parent chip's focus-tab
     const tabUrl = actionEl.dataset.tabUrl;
     if (!tabUrl) return;
+    const card = actionEl.closest('.mission-card');
+    const groupId = card?.dataset.domainId;
 
     const closed = await closeOneTabByUrl(tabUrl, { preserveFixedHidden: true });
     if (!closed) return;
@@ -1760,11 +1782,11 @@ document.addEventListener('click', async (e) => {
       chip.remove();
     }
 
-    await renderDashboard();
-
-    // Update footer
-    const statTabs = document.getElementById('statTabs');
-    if (statTabs) statTabs.textContent = openTabs.length;
+    if (groupId && card) {
+      await refreshSingleDomainCard(groupId, card);
+    } else {
+      await renderDashboard();
+    }
 
     showToast('Tab closed');
     return;
@@ -1776,6 +1798,8 @@ document.addEventListener('click', async (e) => {
     const tabUrl   = actionEl.dataset.tabUrl;
     const tabTitle = actionEl.dataset.tabTitle || tabUrl;
     if (!tabUrl) return;
+    const card = actionEl.closest('.mission-card');
+    const groupId = card?.dataset.domainId;
 
     // Save to chrome.storage.local
     try {
@@ -1799,7 +1823,11 @@ document.addEventListener('click', async (e) => {
       chip.remove();
     }
 
-    await renderDashboard();
+    if (groupId && card) {
+      await refreshSingleDomainCard(groupId, card);
+    } else {
+      await renderDashboard();
+    }
     showToast('Saved for later');
     return;
   }
@@ -1896,15 +1924,11 @@ document.addEventListener('click', async (e) => {
       animateCardOut(card);
     }
 
-    // Remove from in-memory groups
-    const idx = domainGroups.indexOf(group);
-    if (idx !== -1) domainGroups.splice(idx, 1);
+    const { totalDuplicateExtras } = await rebuildDomainGroupsFromOpenTabs();
+    updateOpenTabsUiCounts(totalDuplicateExtras);
 
     const groupLabel = group.domain === '__landing-pages__' ? 'Homepages' : (group.label || friendlyDomain(group.domain));
     showToast(`Closed ${closedCount} tab${closedCount !== 1 ? 's' : ''} from ${groupLabel}`);
-
-    const statTabs = document.getElementById('statTabs');
-    if (statTabs) statTabs.textContent = openTabs.length;
     return;
   }
 
@@ -1913,6 +1937,7 @@ document.addEventListener('click', async (e) => {
     const urlsEncoded = actionEl.dataset.dupeUrls || '';
     const urls = urlsEncoded.split(',').map(u => decodeURIComponent(u)).filter(Boolean);
     if (urls.length === 0) return;
+    const groupId = card?.dataset.domainId;
 
     const { totalExtras } = getDuplicateSummary(
       (card?.dataset.domainId
@@ -1922,7 +1947,11 @@ document.addEventListener('click', async (e) => {
 
     await closeDuplicateTabs(urls, true);
     playCloseSound();
-    await renderDashboard();
+    if (groupId && card) {
+      await refreshSingleDomainCard(groupId, card);
+    } else {
+      await renderDashboard();
+    }
     showToast(`Closed ${totalExtras} duplicate tab${totalExtras !== 1 ? 's' : ''}`);
     return;
   }
