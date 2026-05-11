@@ -744,6 +744,7 @@ const ICONS = {
   tabs:    `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 8.25V18a2.25 2.25 0 0 0 2.25 2.25h13.5A2.25 2.25 0 0 0 21 18V8.25m-18 0V6a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 6v2.25m-18 0h18" /></svg>`,
   close:   `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>`,
   split:   `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h6m0 0 3-3m-3 3 3 3m7 7h-6m0 0-3-3m3 3-3 3M4 17h4.5A3.5 3.5 0 0 0 12 13.5v-3A3.5 3.5 0 0 1 15.5 7H20" /></svg>`,
+  merge:   `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 14 4.5 9.5 9 5m-4.5 4.5H14a5.5 5.5 0 0 1 0 11h-1.5" /></svg>`,
   archive: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5m6 4.125l2.25 2.25m0 0l2.25 2.25M12 13.875l2.25-2.25M12 13.875l-2.25 2.25M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" /></svg>`,
   focus:   `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 19.5 15-15m0 0H8.25m11.25 0v11.25" /></svg>`,
 };
@@ -1469,13 +1470,15 @@ function renderDomainCard(group) {
     actionsHtml += `
       <button class="action-btn split-tabs" data-action="open-domain-split" data-domain-id="${stableId}" title="Split this domain by title text">
         ${ICONS.split}
+        Keyword
       </button>`;
   }
 
   if (group.splitKeyword) {
     actionsHtml += `
-      <button class="action-btn" data-action="remove-domain-split" data-domain="${group.domain}" data-split-keyword="${(group.splitKeyword || '').replace(/"/g, '&quot;')}">
-        Merge back
+      <button class="action-btn split-tabs" data-action="remove-domain-split" data-domain="${group.domain}" data-split-keyword="${(group.splitKeyword || '').replace(/"/g, '&quot;')}">
+        ${ICONS.merge}
+        Merge
       </button>`;
   }
 
@@ -1603,11 +1606,13 @@ function renderDeferredGroup(group) {
           </span>
         </button>
         <div class="deferred-group-actions">
-          <button class="deferred-group-dismiss" data-action="dismiss-deferred-domain" data-domain-key="${group.key}" data-domain-label="${group.label.replace(/"/g, '&quot;')}" title="Close this saved domain">
-            Close all
+          <button class="action-btn close-tabs deferred-group-dismiss" data-action="dismiss-deferred-domain" data-domain-key="${group.key}" data-domain-label="${group.label.replace(/"/g, '&quot;')}" title="Close this saved domain">
+            ${ICONS.close}
+            Close All
           </button>
-          <button class="deferred-group-restore" data-action="restore-deferred-domain" data-domain-key="${group.key}" data-domain-label="${group.label.replace(/"/g, '&quot;')}" title="Restore this saved domain">
-            Restore all
+          <button class="action-btn save-tabs deferred-group-restore" data-action="restore-deferred-domain" data-domain-key="${group.key}" data-domain-label="${group.label.replace(/"/g, '&quot;')}" title="Restore this saved domain">
+            ${ICONS.tabs}
+            Restore All
           </button>
         </div>
       </div>

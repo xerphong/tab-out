@@ -662,9 +662,14 @@ header {
   flex-shrink: 0;
 }
 
-.chip-action svg {
-  width: 15px;
-  height: 15px;
+.chip-action svg,
+.deferred-dismiss svg,
+.action-btn svg,
+.actions .action-btn svg,
+.deferred-group-actions .action-btn svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
 }
 
 .chip-action:hover {
@@ -731,6 +736,8 @@ header {
   display: flex;
   gap: 8px;
   margin-top: 10px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 .action-btn,
@@ -739,7 +746,7 @@ header {
   font-size: 11px;
   font-family: 'DM Sans', sans-serif;
   font-weight: 500;
-  padding: 6px 14px;
+  padding: 6px 10px;
   border-radius: 999px;
   border: 1px solid var(--warm-gray);
   background: var(--card-bg);
@@ -749,16 +756,16 @@ header {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  justify-content: center;
+  white-space: nowrap;
+  line-height: 1;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .action-btn:hover {
   border-color: var(--ink);
   color: var(--ink);
-}
-
-.action-btn svg {
-  width: 12px;
-  height: 12px;
 }
 
 .action-btn.primary {
@@ -797,9 +804,9 @@ header {
 }
 
 .action-btn.split-tabs {
-  width: 28px;
-  padding: 5px 0;
-  justify-content: center;
+  border-color: rgba(123, 143, 156, 0.4);
+  color: var(--accent-slate);
+  background: rgba(123, 143, 156, 0.12);
 }
 
 .action-btn.split-tabs:hover {
@@ -808,12 +815,17 @@ header {
   background: rgba(123, 143, 156, 0.14);
 }
 
+.action-btn.split-tabs[data-action="remove-domain-split"] svg {
+  transform: translateY(-1px);
+}
+
 .action-btn.dedup-btn {
   border: 2px solid var(--status-abandoned);
   color: #fff;
   background: var(--status-abandoned);
   font-weight: 700;
   box-shadow: 0 4px 12px rgba(179, 90, 90, 0.18);
+  flex-basis: 100%;
 }
 
 .action-btn.dedup-btn:hover {
@@ -1283,6 +1295,12 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   align-items: center;
   gap: 8px;
   padding-left: 22px;
+  flex-wrap: nowrap;
+}
+
+.deferred-group-actions .action-btn {
+  flex: 0 0 auto;
+  min-width: auto;
 }
 
 .deferred-group-restore {
@@ -1372,11 +1390,6 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-
-.deferred-dismiss svg {
-  width: 15px;
-  height: 15px;
 }
 
 .deferred-dismiss:hover {
