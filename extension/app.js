@@ -1354,6 +1354,8 @@ function checkTabOutDupes() {
    OVERFLOW CHIPS ("+N more" expand button in domain cards)
    ---------------------------------------------------------------- */
 
+const PAGE_CHIP_BATCH_SIZE = 8;
+
 function buildOverflowChips(hiddenTabs, urlCounts = {}) {
   const hiddenChips = hiddenTabs.map(tab => {
     const label    = cleanTitle(smartTitle(stripTitleNoise(tab.title || ''), tab.url), '');
@@ -1365,7 +1367,7 @@ function buildOverflowChips(hiddenTabs, urlCounts = {}) {
     let domain = '';
     try { domain = new URL(tab.url).hostname; } catch {}
     const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : '';
-    return `<div class="page-chip clickable${chipClass}" data-action="focus-tab" data-tab-url="${safeUrl}" title="${safeTitle}">
+    return `<div class="page-chip clickable page-chip-hidden${chipClass}" data-action="focus-tab" data-tab-url="${safeUrl}" title="${safeTitle}" style="display:none">
       ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
       <span class="chip-text">${label}</span>${dupeTag}
       <div class="chip-actions">
@@ -1379,10 +1381,12 @@ function buildOverflowChips(hiddenTabs, urlCounts = {}) {
     </div>`;
   }).join('');
 
+  const nextBatchSize = Math.min(PAGE_CHIP_BATCH_SIZE, hiddenTabs.length);
+
   return `
-    <div class="page-chips-overflow" style="display:none">${hiddenChips}</div>
+    <div class="page-chips-overflow">${hiddenChips}</div>
     <div class="page-chip page-chip-overflow clickable" data-action="expand-chips">
-      <span class="chip-text">+${hiddenTabs.length} more</span>
+      <span class="chip-text">+${nextBatchSize}/${hiddenTabs.length} more</span>
     </div>`;
 }
 
@@ -1425,7 +1429,7 @@ function renderDomainCard(group) {
     if (!seen.has(tab.url)) { seen.add(tab.url); uniqueTabs.push(tab); }
   }
 
-  const visibleTabs = uniqueTabs.slice(0, 8);
+  const visibleTabs = uniqueTabs.slice(0, PAGE_CHIP_BATCH_SIZE);
   const extraCount  = uniqueTabs.length - visibleTabs.length;
 
   const pageChips = visibleTabs.map(tab => {
@@ -1455,7 +1459,7 @@ function renderDomainCard(group) {
         </button>
       </div>
     </div>`;
-  }).join('') + (extraCount > 0 ? buildOverflowChips(uniqueTabs.slice(8), urlCounts) : '');
+  }).join('') + (extraCount > 0 ? buildOverflowChips(uniqueTabs.slice(PAGE_CHIP_BATCH_SIZE), urlCounts) : '');
 
   let actionsHtml = `
     <button class="action-btn close-tabs" data-action="close-domain-tabs" data-domain-id="${stableId}">
@@ -1565,13 +1569,15 @@ async function renderDeferredColumn() {
  *
  * Builds HTML for one active saved item: title link, domain, time ago, dismiss button.
  */
-function renderDeferredItem(item) {
+function renderDeferredItem(item, { hidden = false } = {}) {
   const { hostname, domain } = deferredDomainInfo(item.url);
   const faviconUrl = hostname ? `https://www.google.com/s2/favicons?domain=${hostname}&sz=16` : '';
   const ago = timeAgo(item.savedAt);
+  const hiddenClass = hidden ? ' deferred-item-hidden' : '';
+  const hiddenStyle = hidden ? ' style="display:none"' : '';
 
   return `
-    <div class="deferred-item" data-deferred-id="${item.id}">
+    <div class="deferred-item${hiddenClass}" data-deferred-id="${item.id}"${hiddenStyle}>
       <div class="deferred-info">
         <a href="${item.url}" target="_blank" rel="noopener" class="deferred-title" title="${(item.title || '').replace(/"/g, '&quot;')}">
           ${faviconUrl ? `<img src="${faviconUrl}" alt="" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px" onerror="this.style.display='none'">` : ''}${item.title || item.url}
@@ -1585,6 +1591,20 @@ function renderDeferredItem(item) {
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
       </button>
     </div>`;
+}
+
+function renderDeferredItemsWithOverflow(items = []) {
+  const visibleItems = items.slice(0, PAGE_CHIP_BATCH_SIZE);
+  const hiddenItems = items.slice(PAGE_CHIP_BATCH_SIZE);
+  const nextBatchSize = Math.min(PAGE_CHIP_BATCH_SIZE, hiddenItems.length);
+  const overflowButton = hiddenItems.length > 0
+    ? `<button class="deferred-more" data-action="expand-deferred-items" type="button">+${nextBatchSize}/${hiddenItems.length} more</button>`
+    : '';
+
+  return `
+    ${visibleItems.map(item => renderDeferredItem(item)).join('')}
+    ${hiddenItems.map(item => renderDeferredItem(item, { hidden: true })).join('')}
+    ${overflowButton}`;
 }
 
 function renderDeferredGroup(group) {
@@ -1618,7 +1638,7 @@ function renderDeferredGroup(group) {
         </div>
       </div>
       <div class="deferred-group-body" style="display:${bodyDisplay}">
-        ${group.items.map(item => renderDeferredItem(item)).join('')}
+        ${renderDeferredItemsWithOverflow(group.items)}
       </div>
     </section>`;
 }
@@ -1778,8 +1798,43 @@ document.addEventListener('click', async (e) => {
   if (action === 'expand-chips') {
     const overflowContainer = actionEl.parentElement.querySelector('.page-chips-overflow');
     if (overflowContainer) {
-      overflowContainer.style.display = 'contents';
-      actionEl.remove();
+      const hiddenChips = Array.from(overflowContainer.querySelectorAll('.page-chip-hidden'));
+      const nextChips = hiddenChips.slice(0, PAGE_CHIP_BATCH_SIZE);
+      nextChips.forEach(chip => {
+        chip.classList.remove('page-chip-hidden');
+        chip.style.display = '';
+      });
+
+      const remaining = hiddenChips.length - nextChips.length;
+      if (remaining > 0) {
+        const nextBatchSize = Math.min(PAGE_CHIP_BATCH_SIZE, remaining);
+        const label = actionEl.querySelector('.chip-text');
+        if (label) label.textContent = `+${nextBatchSize}/${remaining} more`;
+      } else {
+        actionEl.remove();
+      }
+    }
+    return;
+  }
+
+  // ---- Expand saved-for-later items in batches ----
+  if (action === 'expand-deferred-items') {
+    const body = actionEl.closest('.deferred-group-body');
+    if (body) {
+      const hiddenItems = Array.from(body.querySelectorAll('.deferred-item-hidden'));
+      const nextItems = hiddenItems.slice(0, PAGE_CHIP_BATCH_SIZE);
+      nextItems.forEach(item => {
+        item.classList.remove('deferred-item-hidden');
+        item.style.display = '';
+      });
+
+      const remaining = hiddenItems.length - nextItems.length;
+      if (remaining > 0) {
+        const nextBatchSize = Math.min(PAGE_CHIP_BATCH_SIZE, remaining);
+        actionEl.textContent = `+${nextBatchSize}/${remaining} more`;
+      } else {
+        actionEl.remove();
+      }
     }
     return;
   }
