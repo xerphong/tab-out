@@ -580,6 +580,42 @@ header {
   height: 10px;
 }
 
+.split-keyword-recs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.split-keyword-rec {
+  display: inline-flex;
+  align-items: center;
+  max-width: 96px;
+  min-width: 0;
+  border: 1px solid rgba(123, 143, 156, 0.34);
+  border-radius: 999px;
+  background: rgba(123, 143, 156, 0.1);
+  color: var(--accent-slate);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 3px 7px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.split-keyword-rec:hover {
+  background: rgba(123, 143, 156, 0.18);
+  border-color: var(--accent-slate);
+  color: var(--ink);
+}
+
 .mission-summary {
   font-size: 13px;
   color: var(--muted);

@@ -1090,6 +1090,92 @@ function matchDomainSplitRule(hostname, title, rules) {
   ) || null;
 }
 
+const TITLE_KEYWORD_STOPWORDS = new Set([
+  'about', 'after', 'again', 'all', 'also', 'and', 'are', 'best', 'blog', 'can', 'com',
+  'docs', 'for', 'from', 'get', 'has', 'have', 'help', 'home', 'how', 'into', 'login',
+  'more', 'new', 'not', 'official', 'open', 'page', 'read', 'search', 'settings', 'that',
+  'the', 'this', 'using', 'view', 'with', 'www', 'your',
+]);
+
+function stripTrailingSiteBrand(title, groupDomain = '') {
+  const domainRoot = String(groupDomain || '')
+    .replace(/^www\./, '')
+    .split('.')
+    .filter(part => part && !['com', 'org', 'net', 'io', 'co', 'ai', 'dev', 'app', 'so', 'me', 'xyz', 'info', 'us', 'uk', 'jp', 'cn', 'tv'].includes(part))
+    .pop();
+
+  if (!title || !domainRoot) return title || '';
+
+  const escapedRoot = domainRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const trailingBrand = new RegExp(`\\s*[-\\u2010-\\u2015|_/]+\\s*[^-\\u2010-\\u2015|]*${escapedRoot}[^-\\u2010-\\u2015|]*$`, 'i');
+  return title.replace(trailingBrand, '').trim() || title;
+}
+
+function titleKeywordTokens(title, groupDomain = '') {
+  const domainName = friendlyDomain(groupDomain).toLowerCase();
+  const domainTokens = new Set([
+    ...titleKeywordTokensFromText(domainName),
+    ...titleKeywordTokensFromText(String(groupDomain || '').replace(/^www\./, '').replace(/\.\w+$/, '')),
+  ]);
+
+  return titleKeywordTokensFromText(title).filter(token => !domainTokens.has(token));
+}
+
+function titleKeywordTokensFromText(title) {
+  const clean = stripTitleNoise(title || '')
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/[._/@#?=&:+|()[\]{}"'`~!,$%^*<>\\]+/g, ' ');
+
+  const matches = clean.match(/[\p{Script=Han}]{2,}|[a-zA-Z][a-zA-Z0-9-]{2,}/gu) || [];
+  return matches
+    .map(token => token.toLowerCase().replace(/^-+|-+$/g, ''))
+    .filter(token =>
+      token.length >= 3 &&
+      !/^\d+$/.test(token) &&
+      !TITLE_KEYWORD_STOPWORDS.has(token)
+    );
+}
+
+function getRecommendedSplitKeywords(group, limit = 3) {
+  if (!group || group.domain === '__landing-pages__' || group.splitKeyword) return [];
+
+  const tabs = group.tabs || [];
+  if (tabs.length <= 10) return [];
+
+  const tokenStats = new Map();
+  for (const tab of tabs) {
+    const cleanedTitle = cleanTitle(
+      stripTrailingSiteBrand(stripTitleNoise(smartTitle(tab.title || '', tab.url)), group.domain),
+      group.domain
+    );
+    const tokens = new Set(titleKeywordTokens(cleanedTitle, group.domain));
+    for (const token of tokens) {
+      if (!tokenStats.has(token)) tokenStats.set(token, { count: 0, length: token.length });
+      tokenStats.get(token).count += 1;
+    }
+  }
+
+  const existingKeywords = new Set(
+    domainGroups
+      .filter(candidate => candidate.domain === group.domain && candidate.splitKeyword)
+      .map(candidate => candidate.splitKeyword.toLowerCase())
+  );
+
+  return Array.from(tokenStats.entries())
+    .filter(([token, stats]) =>
+      stats.count >= 2 &&
+      stats.count < tabs.length &&
+      !existingKeywords.has(token)
+    )
+    .sort((a, b) => {
+      const countDiff = b[1].count - a[1].count;
+      if (countDiff) return countDiff;
+      return b[1].length - a[1].length;
+    })
+    .slice(0, limit)
+    .map(([keyword, stats]) => ({ keyword, count: stats.count }));
+}
+
 async function getQuickLinks() {
   const configLinks = typeof LOCAL_QUICK_LINKS !== 'undefined'
     ? normalizeQuickLinks(LOCAL_QUICK_LINKS)
@@ -1415,6 +1501,15 @@ function renderDomainCard(group) {
   const totalExtras = dupeUrls.reduce((s, [, c]) => s + c - 1, 0);
 
   const tabBadge = `<span class="open-tabs-badge">${tabCount}</span>`;
+  const recommendedKeywords = getRecommendedSplitKeywords(group);
+  const keywordChips = recommendedKeywords.length > 0
+    ? `<span class="split-keyword-recs" aria-label="Recommended split keywords">
+        ${recommendedKeywords.map(({ keyword, count }) => {
+          const safeKeyword = keyword.replace(/"/g, '&quot;');
+          return `<button class="split-keyword-rec" data-action="apply-domain-split-keyword" data-domain="${group.domain}" data-keyword="${safeKeyword}" title="Split ${count} matching tabs by ${safeKeyword}">${safeKeyword}</button>`;
+        }).join('')}
+      </span>`
+    : '';
 
   const dupeBadge = hasDupes
     ? `<span class="open-tabs-badge" style="color:var(--accent-amber);background:rgba(200,113,58,0.08);">
@@ -1501,6 +1596,7 @@ function renderDomainCard(group) {
       <div class="mission-content">
         <div class="mission-top">
           <span class="mission-name">${isLanding ? 'Homepages' : (group.label || friendlyDomain(group.domain))}</span>
+          ${keywordChips}
           ${tabBadge}
           ${dupeBadge}
         </div>
@@ -1747,6 +1843,17 @@ document.addEventListener('click', async (e) => {
     e.stopPropagation();
     const groupId = actionEl.dataset.domainId;
     if (groupId) openDomainSplitModal(groupId);
+    return;
+  }
+
+  if (action === 'apply-domain-split-keyword') {
+    e.stopPropagation();
+    const domain = actionEl.dataset.domain;
+    const keyword = actionEl.dataset.keyword;
+    if (!domain || !keyword) return;
+    await addDomainSplitRule(domain, keyword);
+    await renderDashboard();
+    showToast(`Split ${friendlyDomain(domain)} by ${keyword}`);
     return;
   }
 
