@@ -1570,9 +1570,8 @@ async function renderDeferredColumn() {
  * Builds HTML for one active saved item: title link, domain, time ago, dismiss button.
  */
 function renderDeferredItem(item, { hidden = false } = {}) {
-  const { hostname, domain } = deferredDomainInfo(item.url);
+  const { hostname } = deferredDomainInfo(item.url);
   const faviconUrl = hostname ? `https://www.google.com/s2/favicons?domain=${hostname}&sz=16` : '';
-  const ago = timeAgo(item.savedAt);
   const hiddenClass = hidden ? ' deferred-item-hidden' : '';
   const hiddenStyle = hidden ? ' style="display:none"' : '';
 
@@ -1582,10 +1581,6 @@ function renderDeferredItem(item, { hidden = false } = {}) {
         <a href="${item.url}" target="_blank" rel="noopener" class="deferred-title" title="${(item.title || '').replace(/"/g, '&quot;')}">
           ${faviconUrl ? `<img src="${faviconUrl}" alt="" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px" onerror="this.style.display='none'">` : ''}${item.title || item.url}
         </a>
-        <div class="deferred-meta">
-          <span>${domain}</span>
-          <span>${ago}</span>
-        </div>
       </div>
       <button class="deferred-dismiss" data-action="dismiss-deferred" data-deferred-id="${item.id}" title="Dismiss">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
@@ -1633,7 +1628,7 @@ function renderDeferredGroup(group) {
           </button>
           <button class="action-btn save-tabs deferred-group-restore" data-action="restore-deferred-domain" data-domain-key="${group.key}" data-domain-label="${group.label.replace(/"/g, '&quot;')}" title="Restore this saved domain">
             ${ICONS.save}
-            Restore All
+            Reopen All
           </button>
         </div>
       </div>

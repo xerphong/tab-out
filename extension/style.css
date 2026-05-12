@@ -450,7 +450,7 @@ header {
 
 /* ---- Mission Cards ---- */
 .missions {
-  columns: 280px;
+  column-count: 2;
   column-gap: 12px;
   margin-bottom: 40px;
 }
@@ -522,10 +522,16 @@ header {
   align-items: center;
   gap: 10px;
   margin-bottom: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .mission-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 600;
   font-size: 15px;
   color: var(--ink);
@@ -560,6 +566,7 @@ header {
 .open-tabs-badge {
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
   font-size: 10px;
   font-weight: 500;
   color: var(--muted);
@@ -591,7 +598,7 @@ header {
   font-size: 13px;
   color: var(--ink);
   background: transparent;
-  padding: 8px 4px;
+  padding: 6px 4px;
   border-radius: 0;
   border: none;
   border-bottom: 1px solid rgba(154, 149, 141, 0.18);
@@ -599,7 +606,7 @@ header {
   display: flex;
   align-items: center;
   gap: 8px;
-  line-height: 1.4;
+  line-height: 1.25;
 }
 
 .page-chip:last-child,
@@ -619,11 +626,10 @@ header {
 .chip-text {
   flex: 1;
   min-width: 0;
-  /* Show up to 2 lines, then ellipsis */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  display: block;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Duplicate badge */
@@ -1172,19 +1178,19 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 /* ---- Two-column layout ---- */
 .dashboard-columns {
   display: flex;
-  gap: 32px;
+  gap: 24px;
   align-items: flex-start;
 }
 
 /* Open tabs column keeps the grid layout */
 .dashboard-columns .active-section {
   flex: 1;
-  min-width: 600px;
+  min-width: 640px;
 }
 
 /* Saved for later column — fixed width on the right, scrolls independently */
 .deferred-column {
-  width: 280px;
+  width: 340px;
   flex-shrink: 0;
   position: sticky;
   top: 32px;
@@ -1340,9 +1346,16 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 }
 
 /* On narrow screens, stack vertically */
-@media (max-width: 800px) {
+@media (max-width: 1050px) {
   .dashboard-columns {
     flex-direction: column;
+  }
+  .dashboard-columns .active-section {
+    min-width: 0;
+    width: 100%;
+  }
+  .missions {
+    column-count: 1;
   }
   .deferred-column {
     width: 100%;
@@ -1393,10 +1406,12 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   font-size: 13px;
   color: var(--ink);
   text-decoration: none;
-  display: block;
+  display: -webkit-box;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.35;
   transition: color 0.15s;
 }
 
