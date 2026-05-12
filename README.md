@@ -17,8 +17,12 @@ No server. No account. No external API calls. Just a Chrome extension.
   增加了可自定义的 Quick Links，方便快速打开常用网站。
 - Added keyword-based domain split rules for more precise grouping.  
   增加了基于关键词的 domain 拆分规则，让分组更精细。
-- Grouped saved-for-later tabs by domain for easier review and cleanup.  
-  将 Saved for Later 标签按域名分组，后续整理和回看更方便。
+- Enhanced Saved for Later with domain grouping plus domain-level restore and cleanup actions.  
+  增强了 Saved for Later：按 domain 分组，并支持按 domain 批量恢复和清理。
+- Refined the tab list layout for denser, cleaner scanning across large domain groups.  
+  优化了标签列表布局，让大量标签的 domain 分组更紧凑、更容易快速浏览。
+- Added smart split keyword suggestions for domains with more than 10 tabs.  
+  为超过 10 个 tabs 的 domain 自动推荐拆分关键词，点击即可生成新的 split group。
 
 ---
 
