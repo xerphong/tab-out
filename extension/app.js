@@ -285,6 +285,50 @@ async function dismissSavedTab(id) {
   }
 }
 
+function normalizeDeferredUrl(url) {
+  return String(url || '').trim();
+}
+
+async function dismissSavedUrl(url) {
+  const { deferred = [] } = await chrome.storage.local.get('deferred');
+  const targetUrl = normalizeDeferredUrl(url);
+  let changed = false;
+
+  for (const item of deferred) {
+    if (item.completed || item.dismissed) continue;
+    if (normalizeDeferredUrl(item.url) === targetUrl) {
+      item.dismissed = true;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    await chrome.storage.local.set({ deferred });
+  }
+}
+
+async function restoreSavedUrl(url) {
+  const { deferred = [] } = await chrome.storage.local.get('deferred');
+  const targetUrl = normalizeDeferredUrl(url);
+  const item = deferred.find(entry =>
+    !entry.completed &&
+    !entry.dismissed &&
+    normalizeDeferredUrl(entry.url) === targetUrl
+  );
+
+  if (!item?.url) return 0;
+
+  await chrome.tabs.create({ url: item.url, active: true });
+  for (const entry of deferred) {
+    if (!entry.completed && !entry.dismissed && normalizeDeferredUrl(entry.url) === targetUrl) {
+      entry.dismissed = true;
+    }
+  }
+
+  await chrome.storage.local.set({ deferred });
+  return 1;
+}
+
 async function dismissSavedDomain(domainKey) {
   const { deferred = [] } = await chrome.storage.local.get('deferred');
   let changed = false;
@@ -313,7 +357,16 @@ async function restoreSavedDomain(domainKey) {
 
   if (items.length === 0) return 0;
 
-  for (const item of items.slice().reverse()) {
+  const uniqueItems = [];
+  const seenUrls = new Set();
+  for (const item of items) {
+    const key = normalizeDeferredUrl(item.url);
+    if (!key || seenUrls.has(key)) continue;
+    seenUrls.add(key);
+    uniqueItems.push(item);
+  }
+
+  for (const item of uniqueItems.slice().reverse()) {
     if (!item.url) continue;
     await chrome.tabs.create({ url: item.url, active: false });
   }
@@ -325,7 +378,7 @@ async function restoreSavedDomain(domainKey) {
   }
 
   await chrome.storage.local.set({ deferred });
-  return items.length;
+  return uniqueItems.length;
 }
 
 
@@ -1063,6 +1116,30 @@ function toggleDeferredGroup(groupKey) {
   deferredGroupCollapseState.set(groupKey, !isDeferredGroupCollapsed(groupKey));
 }
 
+function collapseDeferredDuplicates(items = []) {
+  const groups = new Map();
+
+  for (const item of items) {
+    const key = normalizeDeferredUrl(item.url);
+    if (!key) continue;
+    if (!groups.has(key)) {
+      groups.set(key, { ...item, duplicateCount: 0, duplicateIds: [] });
+    }
+    const group = groups.get(key);
+    group.duplicateCount += 1;
+    group.duplicateIds.push(item.id);
+    if (new Date(item.savedAt || 0) > new Date(group.savedAt || 0)) {
+      group.id = item.id;
+      group.title = item.title;
+      group.savedAt = item.savedAt;
+      group.savedGroup = item.savedGroup;
+    }
+  }
+
+  return Array.from(groups.values())
+    .sort((a, b) => new Date(b.savedAt || 0) - new Date(a.savedAt || 0));
+}
+
 async function addDomainSplitRule(domain, keyword) {
   const rules = await getDomainSplitRules();
   const normalized = normalizeDomainSplitRule({ domain, keyword });
@@ -1670,23 +1747,29 @@ function renderDeferredItem(item, { hidden = false } = {}) {
   const faviconUrl = hostname ? `https://www.google.com/s2/favicons?domain=${hostname}&sz=16` : '';
   const hiddenClass = hidden ? ' deferred-item-hidden' : '';
   const hiddenStyle = hidden ? ' style="display:none"' : '';
+  const safeUrl = (item.url || '').replace(/"/g, '&quot;');
+  const safeTitle = (item.title || item.url || '').replace(/"/g, '&quot;');
+  const duplicateBadge = item.duplicateCount > 1
+    ? ` <span class="deferred-dupe-badge">(${item.duplicateCount}x)</span>`
+    : '';
 
   return `
-    <div class="deferred-item${hiddenClass}" data-deferred-id="${item.id}"${hiddenStyle}>
+    <div class="deferred-item${hiddenClass}" data-deferred-id="${item.id}" data-deferred-url="${safeUrl}"${hiddenStyle}>
       <div class="deferred-info">
-        <a href="${item.url}" target="_blank" rel="noopener" class="deferred-title" title="${(item.title || '').replace(/"/g, '&quot;')}">
-          ${faviconUrl ? `<img src="${faviconUrl}" alt="" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px" onerror="this.style.display='none'">` : ''}${item.title || item.url}
+        <a href="${safeUrl}" target="_blank" rel="noopener" class="deferred-title" data-action="restore-deferred-url" data-deferred-url="${safeUrl}" title="${safeTitle}">
+          ${faviconUrl ? `<img src="${faviconUrl}" alt="" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px" onerror="this.style.display='none'">` : ''}${item.title || item.url}${duplicateBadge}
         </a>
       </div>
-      <button class="deferred-dismiss" data-action="dismiss-deferred" data-deferred-id="${item.id}" title="Dismiss">
+      <button class="deferred-dismiss" data-action="dismiss-deferred-url" data-deferred-url="${safeUrl}" title="Dismiss">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
       </button>
     </div>`;
 }
 
 function renderDeferredItemsWithOverflow(items = []) {
-  const visibleItems = items.slice(0, PAGE_CHIP_BATCH_SIZE);
-  const hiddenItems = items.slice(PAGE_CHIP_BATCH_SIZE);
+  const uniqueItems = collapseDeferredDuplicates(items);
+  const visibleItems = uniqueItems.slice(0, PAGE_CHIP_BATCH_SIZE);
+  const hiddenItems = uniqueItems.slice(PAGE_CHIP_BATCH_SIZE);
   const nextBatchSize = Math.min(PAGE_CHIP_BATCH_SIZE, hiddenItems.length);
   const overflowButton = hiddenItems.length > 0
     ? `<button class="deferred-more" data-action="expand-deferred-items" type="button">+${nextBatchSize}/${hiddenItems.length} more</button>`
@@ -1941,6 +2024,20 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
+  if (action === 'restore-deferred-url') {
+    e.preventDefault();
+    e.stopPropagation();
+    const url = actionEl.dataset.deferredUrl;
+    if (!url) return;
+
+    const restoredCount = await restoreSavedUrl(url);
+    if (restoredCount === 0) return;
+
+    await renderDeferredColumn();
+    showToast('Restored saved tab');
+    return;
+  }
+
   // ---- Focus a specific tab ----
   if (action === 'focus-tab') {
     const tabUrl = actionEl.dataset.tabUrl;
@@ -2078,6 +2175,23 @@ document.addEventListener('click', async (e) => {
   }
 
   // ---- Dismiss a saved tab (removes it entirely) ----
+  if (action === 'dismiss-deferred-url') {
+    const url = actionEl.dataset.deferredUrl;
+    if (!url) return;
+
+    await dismissSavedUrl(url);
+
+    const item = actionEl.closest('.deferred-item');
+    if (item) {
+      item.classList.add('removing');
+      setTimeout(() => {
+        item.remove();
+        renderDeferredColumn();
+      }, 300);
+    }
+    return;
+  }
+
   if (action === 'dismiss-deferred') {
     const id = actionEl.dataset.deferredId;
     if (!id) return;
@@ -2296,4 +2410,9 @@ document.addEventListener('click', (e) => {
 /* ----------------------------------------------------------------
    INITIALIZE
    ---------------------------------------------------------------- */
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.type !== 'tab-out:deferred-updated') return;
+  renderDeferredColumn();
+});
+
 renderDashboard();

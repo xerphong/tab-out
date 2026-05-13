@@ -1455,6 +1455,11 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   color: var(--accent-amber);
 }
 
+.deferred-dupe-badge {
+  color: var(--accent-amber);
+  font-weight: 600;
+}
+
 .deferred-meta {
   font-size: 11px;
   color: var(--muted);
