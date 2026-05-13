@@ -26,8 +26,6 @@ No server. No account. No external API calls. Just a Chrome extension.
 
 - Added a browser context-menu save action that sends the current page directly to Saved for Later, using the same local storage flow as the Tab Out dashboard save button.  
   增加了浏览器右键菜单保存功能，可以把当前页面直接加入 Saved for Later，并复用 Tab Out 页面中保存按钮的本地存储流程。
-- Collapsed exact duplicate Saved for Later entries into a single row with an `(Nx)` badge; opening or dismissing that row restores/removes the duplicate set only once.  
-  将 Saved for Later 中完全重复的条目合并为一行，并显示 `(Nx)` 数量标记；点击打开或删除时，只会对这一组重复页面处理一次。
 ---
 
 ## Attribution / 来源说明
