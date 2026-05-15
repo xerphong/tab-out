@@ -25,6 +25,21 @@
 
 // All open tabs — populated by fetchOpenTabs()
 let openTabs = [];
+let isDeferredExpanded = false;
+
+function applyDeferredLayoutState() {
+  const dashboard = document.getElementById('dashboardColumns');
+  const toggle = document.getElementById('deferredLayoutToggle');
+  if (!dashboard) return;
+
+  dashboard.classList.toggle('deferred-expanded', isDeferredExpanded);
+  if (toggle) {
+    toggle.classList.toggle('is-expanded', isDeferredExpanded);
+    toggle.title = isDeferredExpanded ? 'Restore saved tabs sidebar' : 'Expand saved tabs';
+    toggle.setAttribute('aria-label', toggle.title);
+    toggle.setAttribute('aria-pressed', String(isDeferredExpanded));
+  }
+}
 
 /**
  * fetchOpenTabs()
@@ -1706,6 +1721,7 @@ async function renderDeferredColumn() {
   const countEl        = document.getElementById('deferredCount');
 
   if (!column) return;
+  applyDeferredLayoutState();
 
   try {
     const { active } = await getSavedTabs();
@@ -1714,6 +1730,8 @@ async function renderDeferredColumn() {
     // Hide the entire column if there's nothing to show
     if (active.length === 0) {
       column.style.display = 'none';
+      isDeferredExpanded = false;
+      applyDeferredLayoutState();
       return;
     }
 
@@ -2021,6 +2039,14 @@ document.addEventListener('click', async (e) => {
         actionEl.remove();
       }
     }
+    return;
+  }
+
+  if (action === 'toggle-deferred-layout') {
+    e.preventDefault();
+    e.stopPropagation();
+    isDeferredExpanded = !isDeferredExpanded;
+    applyDeferredLayoutState();
     return;
   }
 

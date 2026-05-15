@@ -78,7 +78,17 @@
       <div class="section-header">
         <h2>Saved for later</h2>
         <div class="section-line"></div>
-        <div class="section-count" id="deferredCount"></div>
+        <div class="section-count deferred-header-actions">
+          <span id="deferredCount"></span>
+          <button class="deferred-layout-toggle" id="deferredLayoutToggle" data-action="toggle-deferred-layout" type="button" title="Expand saved tabs">
+            <svg class="layout-expand-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75h6.5v6.5h-6.5v-6.5ZM13.75 3.75h6.5v6.5h-6.5v-6.5ZM3.75 13.75h6.5v6.5h-6.5v-6.5ZM13.75 13.75h6.5v6.5h-6.5v-6.5Z" />
+            </svg>
+            <svg class="layout-collapse-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 7.75h16M4 12h16M4 16.25h16" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <!-- Active checklist items — injected by renderDeferredList() in app.js -->

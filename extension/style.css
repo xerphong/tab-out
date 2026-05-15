@@ -30,6 +30,7 @@ body {
   background:
     radial-gradient(circle at top, rgba(208, 138, 87, 0.08), transparent 32%),
     linear-gradient(180deg, #1d2126 0%, var(--paper) 100%);
+  background-attachment: fixed;
   color: var(--ink);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
@@ -220,6 +221,47 @@ header {
   font-weight: 500;
   letter-spacing: 0.5px;
   white-space: nowrap;
+}
+
+.deferred-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.deferred-layout-toggle {
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(154, 149, 141, 0.2);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.deferred-layout-toggle:hover {
+  color: var(--ink);
+  border-color: rgba(227, 155, 99, 0.42);
+  background: rgba(227, 155, 99, 0.12);
+}
+
+.deferred-layout-toggle svg {
+  width: 15px;
+  height: 15px;
+}
+
+.deferred-layout-toggle .layout-collapse-icon,
+.deferred-layout-toggle.is-expanded .layout-expand-icon {
+  display: none;
+}
+
+.deferred-layout-toggle.is-expanded .layout-collapse-icon {
+  display: block;
 }
 
 .quick-links-section {
@@ -1260,6 +1302,46 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   gap: 16px;
 }
 
+.dashboard-columns.deferred-expanded {
+  flex-direction: column;
+}
+
+.dashboard-columns.deferred-expanded .deferred-column {
+  order: 1;
+  width: 100%;
+  position: relative;
+  margin-top: -34px;
+  max-height: none;
+  overflow: visible;
+  padding: 16px;
+  border: 1px solid rgba(112, 121, 134, 0.1);
+  background: rgba(24, 29, 38, 0.84);
+  box-shadow: inset 0 1px 0 rgba(146, 152, 161, 0.03);
+}
+
+.dashboard-columns.deferred-expanded .deferred-column::after {
+  display: none;
+}
+
+.dashboard-columns.deferred-expanded .active-section {
+  order: 2;
+  width: 100%;
+  min-width: 0;
+  margin-top: 20px;
+}
+
+.dashboard-columns.deferred-expanded .deferred-list {
+  display: block !important;
+  column-count: 3;
+  column-gap: 16px;
+}
+
+.dashboard-columns.deferred-expanded .deferred-group {
+  break-inside: avoid;
+  margin-bottom: 16px;
+  min-width: 0;
+}
+
 .deferred-group {
   border: 1px solid rgba(154, 149, 141, 0.16);
   border-radius: 10px;
@@ -1396,6 +1478,9 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
   .deferred-column {
     width: 100%;
     position: static;
+  }
+  .dashboard-columns.deferred-expanded .deferred-list {
+    column-count: 1;
   }
 }
 
