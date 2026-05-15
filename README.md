@@ -19,6 +19,8 @@ No server. No account. No external API calls. Just a Chrome extension.
   增加了基于关键词的 domain 拆分规则，让分组更精细。
 - Enhanced Saved for Later with domain grouping plus domain-level restore and cleanup actions.  
   增强了 Saved for Later：按 domain 分组，并支持按 domain 批量恢复和清理。
+- Added an expanded Saved for Later view to make closed pages easier to find.  
+  增加了 Saved for Later 展开视图，方便查找已关闭的页面。
 - Refined the tab list layout for denser, cleaner scanning across large domain groups.  
   优化了标签列表布局，让大量标签的 domain 分组更紧凑、更容易快速浏览。
 - Added smart split keyword suggestions for domains with more than 10 tabs.  
@@ -69,6 +71,8 @@ Agent 会带你一步步安装，通常 1 分钟左右就能完成。
   **点击任意标签即可跳转**，即使它在别的窗口里，也不会新开标签页。
 - **Save for later** bookmarks tabs to a checklist before closing them.  
   **稍后保存**可以在关闭前把标签加入待办清单。
+- **Expand Saved for later** into a wider view so closed pages are easier to find.  
+  **展开 Saved for later** 可以用更宽的视图查找已关闭的页面。
 - **Localhost grouping** shows port numbers next to each tab so you can tell local projects apart.  
   **Localhost 分组**会显示端口号，便于区分本地项目。
 - **Expandable groups** show the first 8 tabs with a clickable `+N more`.  
