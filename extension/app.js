@@ -580,7 +580,7 @@ function checkAndShowEmptyState() {
   `;
 
   const countEl = document.getElementById('openTabsSectionCount');
-  if (countEl) countEl.textContent = '0 domains';
+  if (countEl) countEl.textContent = formatTabDomainCount(0, 0);
 }
 
 /**
@@ -975,6 +975,7 @@ async function rebuildDomainGroupsFromOpenTabs() {
 function updateOpenTabsUiCounts(totalDuplicateExtras = 0) {
   const openTabsSectionCount = document.getElementById('openTabsSectionCount');
   const statTabs = document.getElementById('statTabs');
+  const tabCount = domainGroups.reduce((sum, group) => sum + group.tabs.length, 0);
 
   if (openTabsSectionCount) {
     const closeDuplicatesBtn = totalDuplicateExtras > 0
@@ -982,11 +983,15 @@ function updateOpenTabsUiCounts(totalDuplicateExtras = 0) {
             Close all ${totalDuplicateExtras} duplicate${totalDuplicateExtras !== 1 ? 's' : ''}
           </button>`
       : '';
-    openTabsSectionCount.innerHTML = `${domainGroups.length} domain${domainGroups.length !== 1 ? 's' : ''}${closeDuplicatesBtn}`;
+    openTabsSectionCount.innerHTML = `${formatTabDomainCount(tabCount, domainGroups.length)}${closeDuplicatesBtn}`;
   }
 
   if (statTabs) statTabs.textContent = openTabs.length;
   checkTabOutDupes();
+}
+
+function formatTabDomainCount(tabCount, domainCount) {
+  return `${tabCount}/${domainCount} domains`;
 }
 
 async function refreshSingleDomainCard(groupId, existingCard) {
@@ -1770,7 +1775,7 @@ async function renderDeferredColumn() {
 
     // Render active checklist items
     if (active.length > 0) {
-      countEl.textContent = `${activeGroups.length} domain${activeGroups.length !== 1 ? 's' : ''}`;
+      countEl.textContent = formatTabDomainCount(active.length, activeGroups.length);
       list.innerHTML = activeGroups.map(group => renderDeferredGroup(group)).join('');
       list.style.display = 'flex';
       empty.style.display = 'none';
@@ -1909,7 +1914,7 @@ async function renderStaticDashboard() {
     openTabsSection.style.display = 'block';
   } else {
     if (openTabsSectionTitle) openTabsSectionTitle.textContent = 'Open tabs';
-    if (openTabsSectionCount) openTabsSectionCount.textContent = '0 domains';
+    if (openTabsSectionCount) openTabsSectionCount.textContent = formatTabDomainCount(0, 0);
     if (openTabsMissionsEl) openTabsMissionsEl.innerHTML = '';
   }
 
