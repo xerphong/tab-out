@@ -393,6 +393,8 @@ header {
 
 .modal-card {
   width: min(560px, 100%);
+  max-height: min(90vh, 760px);
+  overflow: auto;
   background: var(--card-bg);
   border: 1px solid var(--warm-gray);
   border-radius: 14px;
@@ -483,8 +485,13 @@ header {
   line-height: 1.5;
 }
 
+.modal-textarea--compact {
+  min-height: 78px;
+}
+
 .modal-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
   margin-top: 8px;

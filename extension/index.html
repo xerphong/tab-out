@@ -156,15 +156,19 @@
       <input class="modal-input" id="quickLinkUrl" maxlength="300" placeholder="https://www.google.com">
 
       <div class="modal-note">
-        Saved changes apply immediately here. To move them to another computer, copy the config snippet below into <code>extension/config.local.js</code>.
+        Saved changes stay on this browser. Copy the transfer text to move these quick links to another machine.
       </div>
 
-      <label class="modal-label" for="quickLinkConfigExport">Config snippet</label>
+      <label class="modal-label" for="quickLinkConfigExport">Transfer text</label>
       <textarea class="modal-textarea" id="quickLinkConfigExport" readonly></textarea>
+
+      <label class="modal-label" for="quickLinkConfigImport">Paste transfer text</label>
+      <textarea class="modal-textarea modal-textarea--compact" id="quickLinkConfigImport" placeholder="Paste quick links JSON here"></textarea>
 
       <div class="modal-actions">
         <button type="button" class="action-btn" id="quickLinkClear">Clear</button>
-        <button type="button" class="action-btn" id="quickLinkCopy">Copy config</button>
+        <button type="button" class="action-btn" id="quickLinkImport">Import</button>
+        <button type="button" class="action-btn" id="quickLinkCopy">Copy links</button>
         <button type="submit" class="action-btn save-tabs">Save</button>
       </div>
     </form>

@@ -825,6 +825,7 @@ const ICONS = {
 let domainGroups = [];
 const QUICK_LINKS_STORAGE_KEY = 'quickLinks';
 const QUICK_LINK_SLOTS = 18;
+const QUICK_LINKS_TRANSFER_TYPE = 'tab-out.quick-links';
 const DOMAIN_SPLIT_RULES_STORAGE_KEY = 'domainSplitRules';
 const DEFAULT_QUICK_LINKS = [
   { title: 'Google', url: 'https://www.google.com' },
@@ -1302,18 +1303,28 @@ function quickLinkHostname(url) {
 }
 
 function exportQuickLinksConfig(links) {
-  const lines = normalizeQuickLinks(links).map(link => {
-    const title = JSON.stringify(link.title || '');
-    const url = JSON.stringify(link.url || '');
-    return `  { title: ${title}, url: ${url} },`;
-  });
+  return JSON.stringify({
+    type: QUICK_LINKS_TRANSFER_TYPE,
+    version: 1,
+    slots: QUICK_LINK_SLOTS,
+    links: normalizeQuickLinks(links),
+  }, null, 2);
+}
 
-  return [
-    '// Personal quick links for Tab Out',
-    'const LOCAL_QUICK_LINKS = [',
-    ...lines,
-    '];',
-  ].join('\n');
+function parseQuickLinksTransfer(text) {
+  const trimmed = String(text || '').trim();
+  if (!trimmed) return null;
+
+  let payload;
+  try {
+    payload = JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+
+  if (Array.isArray(payload)) return normalizeQuickLinks(payload);
+  if (payload?.type !== QUICK_LINKS_TRANSFER_TYPE || !Array.isArray(payload?.links)) return null;
+  return normalizeQuickLinks(payload.links);
 }
 
 async function renderQuickLinks() {
@@ -1355,6 +1366,7 @@ async function openQuickLinkModal(index) {
   const titleInput = document.getElementById('quickLinkTitle');
   const urlInput = document.getElementById('quickLinkUrl');
   const exportEl = document.getElementById('quickLinkConfigExport');
+  const importEl = document.getElementById('quickLinkConfigImport');
 
   if (!modal || !indexInput || !titleInput || !urlInput || !exportEl) return;
 
@@ -1362,6 +1374,7 @@ async function openQuickLinkModal(index) {
   titleInput.value = link.title || '';
   urlInput.value = link.url || '';
   exportEl.value = exportQuickLinksConfig(quickLinks);
+  if (importEl) importEl.value = '';
   modal.style.display = 'flex';
 }
 
@@ -1426,6 +1439,24 @@ async function saveQuickLinkFromModal({ clear = false } = {}) {
 
   await renderQuickLinks();
   showToast(clear ? 'Quick link cleared' : 'Quick link saved');
+  closeQuickLinkModal();
+}
+
+async function importQuickLinksFromModal() {
+  const importEl = document.getElementById('quickLinkConfigImport');
+  const links = parseQuickLinksTransfer(importEl?.value || '');
+  if (!links) {
+    showToast('Paste valid quick links JSON');
+    return;
+  }
+
+  await saveQuickLinks(links);
+
+  const exportEl = document.getElementById('quickLinkConfigExport');
+  if (exportEl) exportEl.value = exportQuickLinksConfig(links);
+
+  await renderQuickLinks();
+  showToast('Quick links imported');
   closeQuickLinkModal();
 }
 
@@ -2401,6 +2432,10 @@ document.getElementById('domainSplitForm')?.addEventListener('submit', async (e)
 
 document.getElementById('quickLinkClear')?.addEventListener('click', async () => {
   await saveQuickLinkFromModal({ clear: true });
+});
+
+document.getElementById('quickLinkImport')?.addEventListener('click', async () => {
+  await importQuickLinksFromModal();
 });
 
 document.getElementById('quickLinkCopy')?.addEventListener('click', async () => {
