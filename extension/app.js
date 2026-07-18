@@ -1340,7 +1340,7 @@ async function renderQuickLinks() {
           <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.9" /><circle cx="12" cy="12" r="1.9" /><circle cx="12" cy="19" r="1.9" /></svg>
         </button>
         <div class="quick-link-body">
-          ${favicon ? `<img class="quick-link-favicon" src="${favicon}" alt="" onerror="this.style.display='none'">` : `<div class="quick-link-favicon quick-link-favicon--empty" aria-hidden="true">
+          ${favicon ? `<img class="quick-link-favicon" src="${favicon}" alt="">` : `<div class="quick-link-favicon quick-link-favicon--empty" aria-hidden="true">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor">
               <rect x="3.75" y="4.75" width="16.5" height="14.5" rx="3" />
               <path stroke-linecap="round" stroke-linejoin="round" d="M8 19.25v1m8-1v1M7.5 8.5h9m-9 3.5h5" />
@@ -1571,7 +1571,7 @@ function buildOverflowChips(hiddenTabs, urlCounts = {}) {
     try { domain = new URL(tab.url).hostname; } catch {}
     const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : '';
     return `<div class="page-chip clickable page-chip-hidden${chipClass}" data-action="focus-tab" data-tab-url="${safeUrl}" title="${safeTitle}" style="display:none">
-      ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
+      ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="">` : ''}
       <span class="chip-text">${label}</span>${dupeTag}
       <div class="chip-actions">
         <button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="Save for later">
@@ -1660,7 +1660,7 @@ function renderDomainCard(group) {
     try { domain = new URL(tab.url).hostname; } catch {}
     const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : '';
     return `<div class="page-chip clickable${chipClass}" data-action="focus-tab" data-tab-url="${safeUrl}" title="${safeTitle}">
-      ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
+      ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="">` : ''}
       <span class="chip-text">${label}</span>${dupeTag}
       <div class="chip-actions">
         <button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="Save for later">
@@ -1800,7 +1800,7 @@ function renderDeferredItem(item, { hidden = false } = {}) {
     <div class="deferred-item${hiddenClass}" data-deferred-id="${item.id}" data-deferred-url="${safeUrl}"${hiddenStyle}>
       <div class="deferred-info">
         <a href="${safeUrl}" target="_blank" rel="noopener" class="deferred-title" data-action="restore-deferred-url" data-deferred-url="${safeUrl}" title="${safeTitle}">
-          ${faviconUrl ? `<img src="${faviconUrl}" alt="" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px" onerror="this.style.display='none'">` : ''}${item.title || item.url}${duplicateBadge}
+          ${faviconUrl ? `<img class="deferred-item-favicon" src="${faviconUrl}" alt="">` : ''}${item.title || item.url}${duplicateBadge}
         </a>
       </div>
       <button class="deferred-dismiss" data-action="dismiss-deferred-url" data-deferred-url="${safeUrl}" title="Dismiss">
@@ -1837,7 +1837,7 @@ function renderDeferredGroup(group) {
           <span class="deferred-group-title-row">
             <svg class="deferred-group-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
             <span class="deferred-group-title-wrap">
-              ${faviconUrl ? `<img src="${faviconUrl}" alt="" class="deferred-group-favicon" onerror="this.style.display='none'">` : ''}
+              ${faviconUrl ? `<img src="${faviconUrl}" alt="" class="deferred-group-favicon">` : ''}
               <span class="deferred-group-title">${group.label}</span>
             </span>
             <span class="deferred-group-count">${itemCount}</span>
@@ -2461,6 +2461,13 @@ document.addEventListener('click', (e) => {
     body.style.display = body.style.display === 'none' ? 'block' : 'none';
   }
 });
+
+document.addEventListener('error', (e) => {
+  const target = e.target;
+  if (!(target instanceof HTMLImageElement)) return;
+  if (!target.matches('.quick-link-favicon, .chip-favicon, .deferred-item-favicon, .deferred-group-favicon')) return;
+  target.classList.add('favicon-load-failed');
+}, true);
 
 /* ----------------------------------------------------------------
    INITIALIZE

@@ -328,6 +328,10 @@ header {
   height: 16px;
 }
 
+.favicon-load-failed {
+  display: none;
+}
+
 .quick-link-title {
   font-size: 14px;
   font-weight: 600;
@@ -1525,6 +1529,13 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 .deferred-info {
   flex: 1;
   min-width: 0;
+}
+
+.deferred-item-favicon {
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+  vertical-align: -2px;
 }
 
 .deferred-title {
