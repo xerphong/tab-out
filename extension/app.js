@@ -824,7 +824,7 @@ const ICONS = {
    ---------------------------------------------------------------- */
 let domainGroups = [];
 const QUICK_LINKS_STORAGE_KEY = 'quickLinks';
-const QUICK_LINK_SLOTS = 18;
+const QUICK_LINK_SLOTS = 36;
 const QUICK_LINKS_TRANSFER_TYPE = 'tab-out.quick-links';
 const DOMAIN_SPLIT_RULES_STORAGE_KEY = 'domainSplitRules';
 const DEFAULT_QUICK_LINKS = [
@@ -1299,14 +1299,6 @@ function quickLinkFavicon(url) {
   }
 }
 
-function quickLinkHostname(url) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return '';
-  }
-}
-
 function exportQuickLinksConfig(links) {
   return JSON.stringify({
     type: QUICK_LINKS_TRANSFER_TYPE,
@@ -1339,13 +1331,11 @@ async function renderQuickLinks() {
   const quickLinks = await getQuickLinks();
   quickLinksGrid.innerHTML = quickLinks.map((link, index) => {
     const hasLink = !!link.url;
-    const safeTitle = (link.title || '').replace(/"/g, '&quot;');
     const safeUrl = (link.url || '').replace(/"/g, '&quot;');
     const favicon = hasLink ? quickLinkFavicon(link.url) : '';
-    const hostname = hasLink ? quickLinkHostname(link.url) : 'Click settings to add one';
 
     return `
-      <div class="quick-link-card ${hasLink ? 'is-filled' : 'is-empty'}" ${hasLink ? `data-action="open-quick-link" data-quick-link-url="${safeUrl}"` : ''}>
+      <div class="quick-link-card ${hasLink ? 'is-filled' : 'is-empty'}" title="${hasLink ? safeUrl : 'Click settings to add a quick link'}" ${hasLink ? `data-action="open-quick-link" data-quick-link-url="${safeUrl}"` : ''}>
         <button class="quick-link-settings chip-action" data-action="edit-quick-link" data-quick-link-index="${index}" title="Edit quick link">
           <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.9" /><circle cx="12" cy="12" r="1.9" /><circle cx="12" cy="19" r="1.9" /></svg>
         </button>
@@ -1357,7 +1347,6 @@ async function renderQuickLinks() {
             </svg>
           </div>`}
           <div class="quick-link-title">${link.title || 'Empty slot'}</div>
-          <div class="quick-link-meta">${hostname}</div>
         </div>
       </div>`;
   }).join('');

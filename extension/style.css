@@ -277,7 +277,7 @@ header {
 
 .quick-link-card {
   position: relative;
-  min-height: 104px;
+  height: 52px;
   border: 1px solid var(--warm-gray);
   border-radius: 10px;
   background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent 28%), var(--card-bg);
@@ -301,20 +301,17 @@ header {
 
 .quick-link-body {
   height: 100%;
-  padding: 18px 14px 14px;
+  padding: 8px 10px;
   display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: flex-start;
+  align-items: center;
   gap: 6px;
 }
 
 .quick-link-favicon {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  flex: 0 0 24px;
-  margin-bottom: 10px;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  flex: 0 0 18px;
 }
 
 .quick-link-favicon--empty {
@@ -335,25 +332,22 @@ header {
   font-size: 14px;
   font-weight: 600;
   color: var(--ink);
-  line-height: 1.3;
-  min-height: calc(1.3em * 2);
+  line-height: 1.2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.quick-link-meta {
-  font-size: 11px;
-  color: var(--muted);
-  line-height: 1.3;
-  word-break: break-word;
-}
-
-.quick-link-settings {
+.quick-link-settings.chip-action {
   position: absolute;
-  top: 6px;
+  top: 50%;
   right: 6px;
+  transform: translateY(-50%);
   opacity: 0;
   z-index: 1;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   padding: 0;
 }
 
