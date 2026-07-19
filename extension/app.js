@@ -10,7 +10,7 @@
    2. Groups tabs by domain with a landing pages category
    3. Renders domain cards, banners, and stats
    4. Handles all user actions (close tabs, save for later, focus tab)
-   5. Stores "Saved for Later" tabs in chrome.storage.local (no server)
+   5. Stores "Saved for Later" tabs in a persistent Chrome bookmarks folder
    ================================================================ */
 
 'use strict';
@@ -222,21 +222,21 @@ async function closeTabOutDupes() {
 
 
 /* ----------------------------------------------------------------
-   SAVED FOR LATER — chrome.storage.local
+   SAVED FOR LATER — persistent Chrome bookmarks folder
 
-   Replaces the old server-side SQLite + REST API with Chrome's
-   built-in key-value storage. Data persists across browser sessions
-   and doesn't require a running server.
+   Saved pages are regular bookmarks inside a dedicated Tab Out folder. The
+   folder belongs to the Chrome profile, so it survives extension uninstall
+   and reinstall without a server or external account.
 
-   Data shape stored under the "deferred" key:
+   Data shape returned by SavedTabsStore:
    [
      {
-       id: "1712345678901",          // timestamp-based unique ID
+       id: "42",                     // Chrome bookmark node ID
        url: "https://example.com",
        title: "Example Page",
        savedAt: "2026-04-04T10:00:00.000Z",  // ISO date string
-       completed: false,             // true = checked off (archived)
-       dismissed: false              // true = dismissed without reading
+       completed: false,
+       dismissed: false
      },
      ...
    ]
@@ -245,11 +245,10 @@ async function closeTabOutDupes() {
 /**
  * saveTabForLater(tab)
  *
- * Saves a single tab to the "Saved for Later" list in chrome.storage.local.
+ * Saves a single tab to the persistent "Saved for Later" bookmarks folder.
  * @param {{ url: string, title: string }} tab
  */
 async function saveTabForLater(tab) {
-  const { deferred = [] } = await chrome.storage.local.get('deferred');
   const savedGroup = tab.savedGroup && typeof tab.savedGroup === 'object'
     ? {
         id: tab.savedGroup.id || '',
@@ -258,28 +257,20 @@ async function saveTabForLater(tab) {
         splitKeyword: tab.savedGroup.splitKeyword || '',
       }
     : null;
-  deferred.unshift({
-    id:        Date.now().toString(),
+  await SavedTabsStore.save({
     url:       tab.url,
     title:     tab.title,
-    savedAt:   new Date().toISOString(),
-    completed: false,
-    dismissed: false,
     savedGroup,
   });
-  await chrome.storage.local.set({ deferred });
 }
 
 /**
  * getSavedTabs()
  *
- * Returns all saved tabs from chrome.storage.local.
- * Filters out dismissed items (those are gone for good).
- * Splits into active (not completed) and archived (completed).
+ * Returns all saved tabs from the persistent bookmarks folder.
  */
 async function getSavedTabs() {
-  const { deferred = [] } = await chrome.storage.local.get('deferred');
-  const visible = deferred.filter(t => !t.dismissed && !t.completed);
+  const visible = await SavedTabsStore.getAll();
   return {
     active:   visible,
     archived: [],
@@ -289,15 +280,10 @@ async function getSavedTabs() {
 /**
  * dismissSavedTab(id)
  *
- * Marks a saved tab as dismissed (removed from all lists).
+ * Removes a saved tab from the persistent bookmarks folder.
  */
 async function dismissSavedTab(id) {
-  const { deferred = [] } = await chrome.storage.local.get('deferred');
-  const tab = deferred.find(t => t.id === id);
-  if (tab) {
-    tab.dismissed = true;
-    await chrome.storage.local.set({ deferred });
-  }
+  await SavedTabsStore.removeIds([id]);
 }
 
 function normalizeDeferredUrl(url) {
@@ -305,68 +291,44 @@ function normalizeDeferredUrl(url) {
 }
 
 async function dismissSavedUrl(url) {
-  const { deferred = [] } = await chrome.storage.local.get('deferred');
+  const deferred = await SavedTabsStore.getAll();
   const targetUrl = normalizeDeferredUrl(url);
-  let changed = false;
-
-  for (const item of deferred) {
-    if (item.completed || item.dismissed) continue;
-    if (normalizeDeferredUrl(item.url) === targetUrl) {
-      item.dismissed = true;
-      changed = true;
-    }
-  }
-
-  if (changed) {
-    await chrome.storage.local.set({ deferred });
-  }
+  const ids = deferred
+    .filter(item => normalizeDeferredUrl(item.url) === targetUrl)
+    .map(item => item.id);
+  await SavedTabsStore.removeIds(ids);
 }
 
 async function restoreSavedUrl(url) {
-  const { deferred = [] } = await chrome.storage.local.get('deferred');
+  const deferred = await SavedTabsStore.getAll();
   const targetUrl = normalizeDeferredUrl(url);
   const item = deferred.find(entry =>
-    !entry.completed &&
-    !entry.dismissed &&
     normalizeDeferredUrl(entry.url) === targetUrl
   );
 
   if (!item?.url) return 0;
 
   await chrome.tabs.create({ url: item.url, active: true });
-  for (const entry of deferred) {
-    if (!entry.completed && !entry.dismissed && normalizeDeferredUrl(entry.url) === targetUrl) {
-      entry.dismissed = true;
-    }
-  }
-
-  await chrome.storage.local.set({ deferred });
+  const ids = deferred
+    .filter(entry => normalizeDeferredUrl(entry.url) === targetUrl)
+    .map(entry => entry.id);
+  await SavedTabsStore.removeIds(ids);
   return 1;
 }
 
 async function dismissSavedDomain(domainKey) {
-  const { deferred = [] } = await chrome.storage.local.get('deferred');
-  let changed = false;
-
-  for (const item of deferred) {
-    if (item.completed || item.dismissed) continue;
-    if (getDeferredGroupKey(item) === String(domainKey || '').toLowerCase()) {
-      item.dismissed = true;
-      changed = true;
-    }
-  }
-
-  if (changed) {
-    await chrome.storage.local.set({ deferred });
-  }
+  const deferred = await SavedTabsStore.getAll();
+  const targetKey = String(domainKey || '').toLowerCase();
+  const ids = deferred
+    .filter(item => getDeferredGroupKey(item) === targetKey)
+    .map(item => item.id);
+  await SavedTabsStore.removeIds(ids);
 }
 
 async function restoreSavedDomain(domainKey) {
-  const { deferred = [] } = await chrome.storage.local.get('deferred');
+  const deferred = await SavedTabsStore.getAll();
   const targetKey = String(domainKey || '').toLowerCase();
   const items = deferred.filter(item =>
-    !item.completed &&
-    !item.dismissed &&
     getDeferredGroupKey(item) === targetKey
   );
 
@@ -386,13 +348,7 @@ async function restoreSavedDomain(domainKey) {
     await chrome.tabs.create({ url: item.url, active: false });
   }
 
-  for (const item of deferred) {
-    if (!item.completed && !item.dismissed && getDeferredGroupKey(item) === targetKey) {
-      item.dismissed = true;
-    }
-  }
-
-  await chrome.storage.local.set({ deferred });
+  await SavedTabsStore.removeIds(items.map(item => item.id));
   return uniqueItems.length;
 }
 
@@ -1759,7 +1715,7 @@ function renderDomainCard(group) {
 /**
  * renderDeferredColumn()
  *
- * Reads saved tabs from chrome.storage.local and renders the right-side
+ * Reads saved tabs from the persistent bookmarks folder and renders the right-side
  * "Saved for Later" checklist column. Shows active items as a checklist
  * and completed items in a collapsible archive.
  */
@@ -2163,7 +2119,7 @@ document.addEventListener('click', async (e) => {
     const card = actionEl.closest('.mission-card');
     const groupId = card?.dataset.domainId;
 
-    // Save to chrome.storage.local
+    // Save to the persistent bookmarks folder
     try {
       const group = groupId ? findDomainGroupById(groupId) : null;
       await saveTabForLater({

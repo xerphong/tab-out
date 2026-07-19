@@ -5,6 +5,8 @@
  * page context menu action that saves the current tab to Saved for later.
  */
 
+importScripts('saved-tabs-store.js');
+
 const SAVE_CURRENT_TAB_MENU_ID = 'tab-out-save-current-tab';
 
 const FRIENDLY_DOMAINS = {
@@ -105,17 +107,11 @@ async function saveTabForLater(tab) {
   const url = getSavableUrl(tab);
   if (!url) return false;
 
-  const { deferred = [] } = await chrome.storage.local.get('deferred');
-  deferred.unshift({
-    id: Date.now().toString(),
+  await SavedTabsStore.save({
     url,
     title: tab.title || url,
-    savedAt: new Date().toISOString(),
-    completed: false,
-    dismissed: false,
     savedGroup: getSavedGroupForTab(tab),
   });
-  await chrome.storage.local.set({ deferred });
   return true;
 }
 
@@ -136,6 +132,23 @@ async function notifyDeferredUpdated() {
     type: 'tab-out:deferred-updated',
   })));
 }
+
+async function handleSavedTabsStoreRequest(message) {
+  if (message.action === 'getAll') return SavedTabsStore.getAll();
+  if (message.action === 'save') return SavedTabsStore.save(message.tab);
+  if (message.action === 'removeIds') return SavedTabsStore.removeIds(message.ids);
+  throw new Error('Unknown saved tabs storage action');
+}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type !== 'tab-out:saved-tabs-store') return undefined;
+
+  handleSavedTabsStoreRequest(message).then(
+    result => sendResponse({ ok: true, result }),
+    error => sendResponse({ ok: false, error: error?.message || String(error) })
+  );
+  return true;
+});
 
 chrome.runtime.onInstalled.addListener(() => {
   createContextMenus();

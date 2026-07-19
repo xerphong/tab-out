@@ -91,6 +91,6 @@ Once the extension is loaded:
 ## Key Facts
 
 - Tab Out is a pure Chrome extension. No server, no Node.js, no npm.
-- Saved tabs are stored in `chrome.storage.local` (persists across sessions).
+- Saved tabs are stored in a dedicated Chrome bookmarks folder (persists across uninstall/reinstall).
 - 100% local. No data is sent to any external service.
 - To update: `cd tab-out && git pull`, then reload the extension in `chrome://extensions`.

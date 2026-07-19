@@ -130,8 +130,8 @@ Open a new tab
   -> 也可以在关闭前先保存到稍后处理列表
 ```
 
-Everything runs inside the Chrome extension. No external server, no API calls, and no data sent anywhere. Saved tabs are stored in `chrome.storage.local`.  
-所有功能都运行在 Chrome 扩展内部。没有外部服务器、没有 API 调用、也不会上传任何数据。保存的标签存储在 `chrome.storage.local` 中。
+Everything runs inside Chrome. No external server, no API calls, and no data sent anywhere. Saved tabs live in a dedicated local Chrome bookmarks folder, so they survive extension uninstall and reinstall.
+所有功能都在 Chrome 本机运行。没有外部服务器、没有 API 调用、也不会上传任何数据。保存的标签会放在专用的本地 Chrome 书签文件夹中，因此卸载并重新安装扩展后仍然存在。
 
 ---
 
@@ -140,14 +140,14 @@ Everything runs inside the Chrome extension. No external server, no API calls, a
 | What | How |
 |------|-----|
 | Extension | Chrome Manifest V3 |
-| Storage | chrome.storage.local |
+| Storage | Chrome bookmarks (Saved for Later) + chrome.storage.local (settings) |
 | Sound | Web Audio API (synthesized, no files) |
 | Animations | CSS transitions + JS confetti particles |
 
 | 项目 | 实现方式 |
 |------|----------|
 | 扩展 | Chrome Manifest V3 |
-| 存储 | chrome.storage.local |
+| 存储 | Chrome 书签（稍后处理）+ chrome.storage.local（设置） |
 | 音效 | Web Audio API（实时合成，无音频文件） |
 | 动画 | CSS transitions + JS confetti particles |
 
