@@ -2139,7 +2139,11 @@ document.addEventListener('click', async (e) => {
     }
 
     const closed = await closeOneTabByUrl(tabUrl, { preserveFixedHidden: true });
-    if (!closed) return;
+    if (!closed) {
+      // The bookmark was saved successfully even if Chrome could not close the tab.
+      await renderDeferredColumn();
+      return;
+    }
 
     // Animate chip out
     const chip = actionEl.closest('.page-chip');
@@ -2153,6 +2157,8 @@ document.addEventListener('click', async (e) => {
 
     if (groupId && card) {
       await refreshSingleDomainCard(groupId, card);
+      // A targeted card refresh does not include the Saved for Later column.
+      await renderDeferredColumn();
     } else {
       await renderDashboard();
     }
