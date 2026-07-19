@@ -307,11 +307,34 @@ header {
   gap: 6px;
 }
 
+.quick-link-icon,
 .quick-link-favicon {
   width: 18px;
   height: 18px;
   border-radius: 4px;
   flex: 0 0 18px;
+}
+
+.quick-link-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(255,255,255,0.08);
+  color: var(--muted);
+}
+
+.quick-link-icon-fallback {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.quick-link-icon .quick-link-favicon {
+  position: absolute;
+  inset: 0;
+  object-fit: contain;
 }
 
 .quick-link-favicon--empty {
