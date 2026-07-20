@@ -3,7 +3,7 @@
  *
  * Chrome deletes chrome.storage.local when an extension is uninstalled. A
  * normal bookmarks folder belongs to the browser profile instead, so it stays
- * available when Tab Out is removed and loaded again.
+ * available when Tab Out is removed and follows Chrome bookmark sync.
  */
 
 'use strict';
@@ -29,28 +29,62 @@
     return result;
   }
 
-  async function getLocalOtherBookmarksFolder() {
+  function compareBookmarkFolders(a, b) {
+    const dateDifference = (a.dateAdded || Number.MAX_SAFE_INTEGER) -
+      (b.dateAdded || Number.MAX_SAFE_INTEGER);
+    if (dateDifference !== 0) return dateDifference;
+    return String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
+  }
+
+  async function getOtherBookmarksFolders() {
     const tree = await chrome.bookmarks.getTree();
-    return flattenBookmarkTree(tree).find(node =>
+    return flattenBookmarkTree(tree).filter(node =>
       node.folderType === 'other' &&
-      node.syncing === false &&
       !node.unmodifiable
-    ) || null;
+    );
+  }
+
+  async function mergeSavedFolders(target, sourceFolders) {
+    for (const source of sourceFolders) {
+      if (source.id === target.id) continue;
+
+      const children = await chrome.bookmarks.getChildren(source.id);
+      for (const child of children.slice().reverse()) {
+        await chrome.bookmarks.move(child.id, { parentId: target.id, index: 0 });
+      }
+
+      await chrome.bookmarks.remove(source.id).catch(() => {});
+    }
   }
 
   async function findOrCreateRootFolder() {
     const matches = await chrome.bookmarks.search({ title: ROOT_FOLDER_TITLE });
     const exactFolders = matches.filter(node => node.title === ROOT_FOLDER_TITLE && !node.url);
-    const folder = exactFolders.find(node => node.syncing === false) || exactFolders[0];
-    if (folder) return folder;
+    const otherFolders = await getOtherBookmarksFolders();
+    const syncingParent = otherFolders.find(node => node.syncing === true);
+    const fallbackParent = otherFolders.find(node => node.syncing !== false) || otherFolders[0];
+    const syncingRoots = exactFolders
+      .filter(node => node.syncing === true)
+      .sort(compareBookmarkFolders);
 
-    // Chrome 134+ identifies local-only bookmark roots. Prefer that location
-    // so the list stays on this computer even when bookmark sync is enabled.
-    const localFolder = await getLocalOtherBookmarksFolder();
-    return chrome.bookmarks.create({
-      ...(localFolder ? { parentId: localFolder.id } : {}),
-      title: ROOT_FOLDER_TITLE,
-    });
+    let folder = syncingRoots[0];
+    if (!folder && syncingParent) {
+      folder = await chrome.bookmarks.create({
+        parentId: syncingParent.id,
+        title: ROOT_FOLDER_TITLE,
+      });
+    }
+    if (!folder) {
+      folder = exactFolders.sort(compareBookmarkFolders)[0] || await chrome.bookmarks.create({
+        ...(fallbackParent ? { parentId: fallbackParent.id } : {}),
+        title: ROOT_FOLDER_TITLE,
+      });
+    }
+
+    // Consolidate older local-only folders and duplicate synced folders into
+    // the selected synced folder without dropping saved pages.
+    await mergeSavedFolders(folder, exactFolders);
+    return folder;
   }
 
   async function getRootFolder() {
@@ -176,9 +210,14 @@
     return result;
   }
 
+  function invalidateRootFolder() {
+    rootFolderPromise = null;
+  }
+
   globalThis.SavedTabsStore = Object.freeze({
     getAll,
     save: tab => enqueueMutation(() => save(tab)),
     removeIds: ids => enqueueMutation(() => removeIds(ids)),
+    invalidateRootFolder,
   });
 })();

@@ -133,6 +133,18 @@ async function notifyDeferredUpdated() {
   })));
 }
 
+let deferredUpdateTimer = null;
+
+function scheduleDeferredUpdated() {
+  SavedTabsStore.invalidateRootFolder();
+  clearTimeout(deferredUpdateTimer);
+  deferredUpdateTimer = setTimeout(() => {
+    notifyDeferredUpdated().catch(err => {
+      console.warn('[tab-out] Failed to refresh saved tabs after bookmark sync:', err);
+    });
+  }, 150);
+}
+
 async function handleSavedTabsStoreRequest(message) {
   if (message.action === 'getAll') return SavedTabsStore.getAll();
   if (message.action === 'save') return SavedTabsStore.save(message.tab);
@@ -149,6 +161,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   );
   return true;
 });
+
+chrome.bookmarks.onCreated.addListener(scheduleDeferredUpdated);
+chrome.bookmarks.onRemoved.addListener(scheduleDeferredUpdated);
+chrome.bookmarks.onChanged.addListener(scheduleDeferredUpdated);
+chrome.bookmarks.onMoved.addListener(scheduleDeferredUpdated);
 
 chrome.runtime.onInstalled.addListener(() => {
   createContextMenus();

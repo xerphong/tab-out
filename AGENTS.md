@@ -17,7 +17,7 @@ Before doing anything technical, tell the user what they're about to get:
 > - **Duplicate detection** flags when you have the same page open twice
 > - **Click any tab title to jump to it** even across different Chrome windows
 > - **Save for later** bookmark individual tabs to a checklist before closing them
-> - **100% local** no server, no accounts, no data sent anywhere
+> - **No Tab Out server or account** saved pages can follow Chrome bookmark sync across devices
 >
 > It's just a Chrome extension. Setup takes about 1 minute.
 
@@ -91,6 +91,6 @@ Once the extension is loaded:
 ## Key Facts
 
 - Tab Out is a pure Chrome extension. No server, no Node.js, no npm.
-- Saved tabs are stored in a dedicated Chrome bookmarks folder (persists across uninstall/reinstall).
-- 100% local. No data is sent to any external service.
+- Saved tabs are stored in a dedicated Chrome bookmarks folder (persists across uninstall/reinstall and follows Chrome bookmark sync when enabled).
+- Tab Out has no server or account. Cross-device saved tabs use the user's existing Chrome bookmark sync.
 - To update: `cd tab-out && git pull`, then reload the extension in `chrome://extensions`.

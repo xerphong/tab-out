@@ -130,8 +130,8 @@ Open a new tab
   -> 也可以在关闭前先保存到稍后处理列表
 ```
 
-Everything runs inside Chrome. No external server, no API calls, and no data sent anywhere. Saved tabs live in a dedicated local Chrome bookmarks folder, so they survive extension uninstall and reinstall.
-所有功能都在 Chrome 本机运行。没有外部服务器、没有 API 调用、也不会上传任何数据。保存的标签会放在专用的本地 Chrome 书签文件夹中，因此卸载并重新安装扩展后仍然存在。
+Everything runs inside Chrome. Tab Out has no external server, API, or account. Saved tabs live in a dedicated Chrome bookmarks folder, so they survive extension reinstall and follow Chrome bookmark sync when it is enabled.
+所有功能都在 Chrome 内运行，Tab Out 没有外部服务器、API 或独立账号。保存的标签会放在专用的 Chrome 书签文件夹中，因此重新安装扩展后仍然存在，并会在启用 Chrome 书签同步时跟随同步。
 
 ---
 
@@ -140,14 +140,14 @@ Everything runs inside Chrome. No external server, no API calls, and no data sen
 | What | How |
 |------|-----|
 | Extension | Chrome Manifest V3 |
-| Storage | Chrome bookmarks (Saved for Later) + chrome.storage.local (settings) |
+| Storage | Synced Chrome bookmarks (Saved for Later) + chrome.storage.local (device settings) |
 | Sound | Web Audio API (synthesized, no files) |
 | Animations | CSS transitions + JS confetti particles |
 
 | 项目 | 实现方式 |
 |------|----------|
 | 扩展 | Chrome Manifest V3 |
-| 存储 | Chrome 书签（稍后处理）+ chrome.storage.local（设置） |
+| 存储 | Chrome 同步书签（稍后处理）+ chrome.storage.local（设备设置） |
 | 音效 | Web Audio API（实时合成，无音频文件） |
 | 动画 | CSS transitions + JS confetti particles |
 
