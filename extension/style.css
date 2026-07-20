@@ -335,6 +335,19 @@ header {
   position: absolute;
   inset: 0;
   object-fit: contain;
+  opacity: 0;
+}
+
+.quick-link-icon.has-favicon {
+  background: transparent;
+}
+
+.quick-link-icon.has-favicon .quick-link-icon-fallback {
+  display: none;
+}
+
+.quick-link-icon.has-favicon .quick-link-favicon {
+  opacity: 1;
 }
 
 .quick-link-favicon--empty {

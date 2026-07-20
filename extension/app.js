@@ -2447,6 +2447,13 @@ document.addEventListener('click', (e) => {
   }
 });
 
+document.addEventListener('load', (e) => {
+  const target = e.target;
+  if (!(target instanceof HTMLImageElement)) return;
+  if (!target.matches('.quick-link-favicon')) return;
+  target.closest('.quick-link-icon')?.classList.add('has-favicon');
+}, true);
+
 document.addEventListener('error', (e) => {
   const target = e.target;
   if (!(target instanceof HTMLImageElement)) return;
