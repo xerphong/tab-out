@@ -57,6 +57,46 @@
     }
   }
 
+  function normalizeSavedUrl(url) {
+    return String(url || '').trim();
+  }
+
+  function compareSavedBookmarks(a, b) {
+    const dateDifference = (a.dateAdded || Number.MAX_SAFE_INTEGER) -
+      (b.dateAdded || Number.MAX_SAFE_INTEGER);
+    if (dateDifference !== 0) return dateDifference;
+
+    const titleDifference = String(a.title || '').localeCompare(String(b.title || ''));
+    if (titleDifference !== 0) return titleDifference;
+    return String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
+  }
+
+  async function deduplicateSavedBookmarks(folder) {
+    const children = await chrome.bookmarks.getChildren(folder.id);
+    const bookmarksByUrl = new Map();
+
+    for (const bookmark of children.filter(node => Boolean(node.url))) {
+      const url = normalizeSavedUrl(bookmark.url);
+      if (!url) continue;
+      if (!bookmarksByUrl.has(url)) bookmarksByUrl.set(url, []);
+      bookmarksByUrl.get(url).push(bookmark);
+    }
+
+    const duplicateIds = [];
+    for (const bookmarks of bookmarksByUrl.values()) {
+      if (bookmarks.length < 2) continue;
+      bookmarks.sort(compareSavedBookmarks);
+      duplicateIds.push(...bookmarks.slice(1).map(bookmark => bookmark.id));
+    }
+
+    if (duplicateIds.length === 0) return;
+
+    await Promise.allSettled(duplicateIds.map(id => chrome.bookmarks.remove(id)));
+    const metadata = await getMetadata();
+    for (const id of duplicateIds) delete metadata[id];
+    await setMetadata(metadata);
+  }
+
   async function findOrCreateRootFolder() {
     const matches = await chrome.bookmarks.search({ title: ROOT_FOLDER_TITLE });
     const exactFolders = matches.filter(node => node.title === ROOT_FOLDER_TITLE && !node.url);
@@ -84,6 +124,7 @@
     // Consolidate older local-only folders and duplicate synced folders into
     // the selected synced folder without dropping saved pages.
     await mergeSavedFolders(folder, exactFolders);
+    await deduplicateSavedBookmarks(folder);
     return folder;
   }
 
@@ -141,8 +182,9 @@
   async function initialize() {
     if (!initializationPromise) {
       initializationPromise = (async () => {
-        await getRootFolder();
+        const root = await getRootFolder();
         await migrateLegacyStorage();
+        await deduplicateSavedBookmarks(root);
       })().catch(error => {
         initializationPromise = null;
         throw error;
@@ -177,6 +219,24 @@
 
     await initialize();
     const root = await getRootFolder();
+    const existingBookmarks = await chrome.bookmarks.getChildren(root.id);
+    const targetUrl = normalizeSavedUrl(tab.url);
+    const existing = existingBookmarks
+      .filter(node => normalizeSavedUrl(node.url) === targetUrl)
+      .sort(compareSavedBookmarks)[0];
+
+    if (existing) {
+      const metadata = await getMetadata();
+      if (!metadata[existing.id]) {
+        metadata[existing.id] = {
+          savedAt: new Date(existing.dateAdded || Date.now()).toISOString(),
+          savedGroup: tab.savedGroup || null,
+        };
+        await setMetadata(metadata);
+      }
+      return existing.id;
+    }
+
     const bookmark = await chrome.bookmarks.create({
       parentId: root.id,
       index: 0,
